@@ -56,25 +56,27 @@ export default function BookingReceipt() {
   };
 
   const generateQRCode = async (bookingData: Booking) => {
-    const qrData = bookingData.qr_data || JSON.stringify({
-      booking_id: bookingData.id,
-      farmer_name: bookingData.farmer_name,
-      farmer_phone: bookingData.farmer_phone,
-      machine_id: bookingData.machine_id,
-      location: bookingData.location,
-      acres: bookingData.acres,
-      date: bookingData.created_at,
-      status: bookingData.status
-    });
+    // Generate compact receipt text for QR scanning
+    const receiptText = `AgriTrack Receipt
+Booking: ${bookingData.id}
+Status: ${bookingData.status?.toUpperCase() || 'PENDING'}
+Name: ${bookingData.farmer_name}
+Phone: ${bookingData.farmer_phone}
+Location: ${bookingData.location}
+Machine: ${bookingData.machine_id}
+Area: ${bookingData.acres} acres
+Date: ${new Date(bookingData.created_at).toLocaleDateString('en-IN')}
+Valid booking receipt.`;
 
     try {
-      const qrDataUrl = await QRCode.toDataURL(qrData, {
+      const qrDataUrl = await QRCode.toDataURL(receiptText, {
         width: 300,
         margin: 2,
         color: {
           dark: '#000000',
           light: '#ffffff'
-        }
+        },
+        errorCorrectionLevel: 'L'
       });
       setQrCode(qrDataUrl);
     } catch (error) {
