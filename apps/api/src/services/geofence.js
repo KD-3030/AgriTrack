@@ -292,6 +292,42 @@ class GeofenceService {
       console.error('Error logging geofence event:', err.message);
     }
   }
+
+  /**
+   * Check geofence for a machine at given coordinates
+   * This is the main entry point called from index.js and routes
+   * @param {string} deviceId - Machine device ID
+   * @param {number} lat - Latitude
+   * @param {number} lng - Longitude
+   * @returns {Object} Result with events array and breach status
+   */
+  async checkGeofence(deviceId, lat, lng) {
+    try {
+      // Check position against cached geofences
+      const events = this.checkPosition(deviceId, lat, lng);
+      
+      // Log any breach events to database
+      for (const event of events) {
+        await this.logGeofenceEvent(event);
+      }
+
+      return {
+        deviceId,
+        location: { lat, lng },
+        events,
+        breachDetected: events.length > 0
+      };
+    } catch (err) {
+      console.error('Error checking geofence:', err.message);
+      return {
+        deviceId,
+        location: { lat, lng },
+        events: [],
+        breachDetected: false,
+        error: err.message
+      };
+    }
+  }
 }
 
 module.exports = new GeofenceService();

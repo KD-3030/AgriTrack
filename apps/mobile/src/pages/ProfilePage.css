@@ -34,7 +34,75 @@
 .profile-header .phone {
   color: var(--text-muted);
   font-size: 14px;
-  margin: 0;
+  margin: 0 0 12px 0;
+}
+
+/* Green Badge */
+.green-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.green-badge.certified {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.green-badge.pending {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+/* Credits Section */
+.credits-section {
+  margin-bottom: 24px;
+}
+
+.credits-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: linear-gradient(135deg, #fef3c7 0%, #fef9c3 100%);
+  border-radius: 16px;
+  padding: 20px;
+  cursor: pointer;
+}
+
+.credits-icon {
+  width: 50px;
+  height: 50px;
+  background: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #d97706;
+}
+
+.credits-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.credits-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #92400e;
+}
+
+.credits-label {
+  font-size: 13px;
+  color: #b45309;
+}
+
+.credits-arrow {
+  color: #92400e;
 }
 
 /* Profile Section */
@@ -132,6 +200,7 @@
   align-items: center;
   gap: 12px;
   font-size: 15px;
+  flex: 1;
 }
 
 .settings-left svg {
@@ -140,6 +209,26 @@
 
 .chevron {
   color: var(--text-muted);
+}
+
+.badge-active {
+  background: #dcfce7;
+  color: #16a34a;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.badge-new {
+  background: #dbeafe;
+  color: #2563eb;
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-weight: 700;
+  margin-right: 4px;
 }
 
 /* Toggle Switch */

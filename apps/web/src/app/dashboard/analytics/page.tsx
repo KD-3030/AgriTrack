@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Sidebar } from '@/components/layout/sidebar'
 import { useSocket } from '@/hooks/use-socket'
 import { 
   fetchEfficiency, 
@@ -103,11 +102,7 @@ export default function AIAnalyticsPage() {
   })) || []
 
   return (
-    <div className="flex h-screen bg-background">
-      <Sidebar />
-      
-      <main className="flex-1 overflow-auto">
-        <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between">
             <div>
@@ -382,14 +377,12 @@ export default function AIAnalyticsPage() {
             </div>
           )}
 
-          {/* Last Refresh */}
-          {lastRefresh && (
-            <p className="text-center text-sm text-muted-foreground">
-              Last updated: {lastRefresh.toLocaleTimeString()}
-            </p>
-          )}
-        </div>
-      </main>
+      {/* Last Refresh */}
+      {lastRefresh && (
+        <p className="text-center text-sm text-muted-foreground">
+          Last updated: {lastRefresh.toLocaleTimeString()}
+        </p>
+      )}
     </div>
   )
 }

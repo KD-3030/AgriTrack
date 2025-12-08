@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Sidebar } from '@/components/layout/sidebar'
 import { useSocket } from '@/hooks/use-socket'
 import { 
   fetchCropDashboard, 
@@ -156,11 +155,7 @@ export default function LiveReportsPage() {
   }
 
   return (
-    <div className="flex h-screen bg-background">
-      <Sidebar />
-      
-      <main className="flex-1 overflow-auto">
-        <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between">
             <div>
@@ -404,12 +399,10 @@ export default function LiveReportsPage() {
             </div>
           </div>
 
-          {/* Footer */}
-          <div className="text-center text-sm text-muted-foreground">
-            Report generated at {new Date().toLocaleString()} • AgriTrack v2.1
-          </div>
-        </div>
-      </main>
+      {/* Footer */}
+      <div className="text-center text-sm text-muted-foreground">
+        Report generated at {new Date().toLocaleString()} • AgriTrack v2.1
+      </div>
     </div>
   )
 }

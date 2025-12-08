@@ -3,10 +3,10 @@
 import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import { Sidebar } from '@/components/layout/sidebar'
 import { StatsCards } from '@/components/dashboard/stats-cards'
 import { AlertsFeed } from '@/components/dashboard/alerts-feed'
 import { MachineList } from '@/components/dashboard/machine-list'
+import { SchedulingSummary } from '@/components/dashboard/scheduling-summary'
 import { useSocket } from '@/hooks/use-socket'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { 
@@ -21,7 +21,8 @@ import {
   FileText, 
   ArrowRight,
   TrendingUp,
-  AlertTriangle
+  AlertTriangle,
+  CalendarClock
 } from 'lucide-react'
 
 // Dynamic import for Leaflet (no SSR)
@@ -42,30 +43,26 @@ export default function DashboardPage() {
   }, [])
 
   return (
-    <div className="flex h-screen bg-background">
-      <Sidebar />
-      
-      <main className="flex-1 overflow-auto">
-        <div className="p-6 space-y-6">
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-              <p className="text-muted-foreground">Real-time CRM machinery monitoring</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className={`w-3 h-3 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-              <span className="text-sm text-muted-foreground">
-                {connected ? 'Live' : 'Connecting...'}
-              </span>
-            </div>
-          </div>
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+          <p className="text-muted-foreground">Real-time CRM machinery monitoring</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className={`w-3 h-3 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+          <span className="text-sm text-muted-foreground">
+            {connected ? 'Live' : 'Connecting...'}
+          </span>
+        </div>
+      </div>
 
           {/* Stats Cards */}
           <StatsCards stats={stats} />
 
           {/* Quick Access Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <Link href="/dashboard/analytics">
               <div className="bg-gradient-to-br from-purple-500 to-purple-700 rounded-lg p-4 text-white hover:shadow-lg transition-all cursor-pointer">
                 <div className="flex items-center justify-between">
@@ -110,6 +107,21 @@ export default function DashboardPage() {
                 </div>
               </div>
             </Link>
+
+            <Link href="/dashboard/scheduling">
+              <div className="bg-gradient-to-br from-green-500 to-teal-600 rounded-lg p-4 text-white hover:shadow-lg transition-all cursor-pointer">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CalendarClock className="w-8 h-8 mb-2" />
+                    <h3 className="font-semibold">Harvest Scheduler</h3>
+                    <p className="text-sm opacity-80">
+                      Dynamic scheduling
+                    </p>
+                  </div>
+                  <ArrowRight className="w-5 h-5" />
+                </div>
+              </div>
+            </Link>
           </div>
 
           {/* Main Content */}
@@ -121,7 +133,7 @@ export default function DashboardPage() {
             </TabsList>
 
             <TabsContent value="map" className="space-y-4">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                 <div className="lg:col-span-2">
                   <div className="bg-card rounded-lg border p-4">
                     <h3 className="font-semibold mb-4">Live Machine Locations</h3>
@@ -132,6 +144,9 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <AlertsFeed machines={machines} />
+                </div>
+                <div>
+                  <SchedulingSummary />
                 </div>
               </div>
             </TabsContent>
@@ -145,7 +160,5 @@ export default function DashboardPage() {
             </TabsContent>
           </Tabs>
         </div>
-      </main>
-    </div>
   )
 }

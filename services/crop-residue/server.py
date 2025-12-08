@@ -1,7 +1,8 @@
 """
 FastAPI Server for Crop Residue Management System
 =================================================
-Exposes REST API endpoints for harvest predictions and machine allocations.
+Exposes REST API endpoints for harvest predictions, machine allocations,
+and dynamic harvest scheduling system.
 All data is generated dynamically - no hardcoded responses.
 
 Endpoints:
@@ -11,25 +12,38 @@ Endpoints:
     GET  /api/allocations     - Get machine allocations
     GET  /api/machines        - List all available machines
     GET  /api/urgent          - Get urgent districts only (priority >= 7)
-    POST /api/predict         - Run prediction with custom parameters
+    GET  /api/dashboard       - Complete dashboard data
+    
+    # Scheduling Endpoints (NEW)
+    GET  /api/scheduling/clusters      - Get harvest clusters
+    GET  /api/scheduling/schedules     - Get farmer schedules  
+    GET  /api/scheduling/gantt         - Gantt chart data
+    GET  /api/scheduling/heatmap       - Machine availability heatmap
+    GET  /api/scheduling/summary       - Scheduling summary
+    GET  /api/scheduling/dashboard     - Complete scheduling dashboard
+    GET  /api/scheduling/sms/preview   - Preview SMS messages
 """
 
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, List
 from datetime import datetime
+from dataclasses import asdict
 import json
 
 # Import our prediction modules
 from mock_data import generate_district_ndvi_data, get_machines_data, get_districts_data, DISTRICTS
 from harvest_predictor import HarvestPredictor
 from machine_allocator import MachineAllocator
+from harvest_scheduler import HarvestScheduler
 
 # Initialize FastAPI app
 app = FastAPI(
     title="Crop Residue Management API",
-    description="Satellite-based harvest prediction and machine allocation for Punjab, Haryana, Delhi-NCR",
-    version="1.0.0"
+    description="Satellite-based harvest prediction, machine allocation, and dynamic scheduling for Punjab, Haryana, Delhi-NCR. Designed to normalize machine demand and prevent stubble burning.",
+    version="2.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
 )
 
 # Enable CORS for Next.js frontend (localhost:3000)
@@ -89,27 +103,33 @@ def get_fresh_allocations(predictions: List[dict]) -> tuple:
     return allocator, allocations, summary
 
 
+def get_fresh_scheduler(predictions: List[dict]) -> HarvestScheduler:
+    """
+    Generate fresh scheduler with clusters and farmer assignments.
+    
+    Args:
+        predictions: List of prediction dictionaries
+        
+    Returns:
+        HarvestScheduler instance with clusters and schedules populated
+    """
+    machines = get_machines_data()
+    scheduler = HarvestScheduler(predictions, machines)
+    scheduler.create_clusters()
+    scheduler.assign_farmers_to_clusters()
+    return scheduler
+
+
+from fastapi.responses import RedirectResponse
+
 # ═══════════════════════════════════════════════════════════════════════════
 # API ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════════════
 
-@app.get("/")
+@app.get("/", include_in_schema=False)
 async def root():
-    """Root endpoint with API information."""
-    return {
-        "name": "Crop Residue Management API",
-        "version": "1.0.0",
-        "status": "running",
-        "endpoints": {
-            "health": "/api/health",
-            "districts": "/api/districts",
-            "predictions": "/api/predictions",
-            "allocations": "/api/allocations",
-            "machines": "/api/machines",
-            "urgent": "/api/urgent",
-            "dashboard": "/api/dashboard"
-        }
-    }
+    """Redirect root to API documentation."""
+    return RedirectResponse(url="/docs")
 
 
 @app.get("/api/health")
@@ -328,13 +348,280 @@ async def get_ndvi_history(
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# SCHEDULING API ENDPOINTS (Dynamic Harvest Scheduler)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/scheduling/clusters", tags=["Scheduling"])
+async def get_scheduling_clusters():
+    """
+    Get harvest clusters for the scheduling system.
+    Clusters group districts with similar harvest timing to normalize machine demand.
+    
+    Each cluster represents a 5-day harvest window with allocated machines.
+    """
+    _, predictions = get_fresh_predictions(30)
+    scheduler = get_fresh_scheduler(predictions)
+    
+    clusters_data = []
+    for cluster in scheduler.clusters:
+        clusters_data.append({
+            "id": cluster.id,
+            "name": cluster.name,
+            "region": cluster.region,
+            "districts": cluster.districts,
+            "district_ids": cluster.district_ids,
+            "window_start": cluster.window_start.isoformat(),
+            "window_end": cluster.window_end.isoformat(),
+            "avg_ndvi": cluster.avg_ndvi,
+            "priority_score": cluster.priority_score,
+            "machines_required": cluster.machines_required,
+            "machines_allocated": cluster.machines_allocated,
+            "total_acres": cluster.total_acres,
+            "farmers_count": len(cluster.farmers),
+            "status": cluster.status,
+            "season": cluster.season
+        })
+    
+    return {
+        "generated_at": datetime.now().isoformat(),
+        "season": "Kharif 2025",
+        "total_clusters": len(clusters_data),
+        "clusters": clusters_data
+    }
+
+
+@app.get("/api/scheduling/schedules", tags=["Scheduling"])
+async def get_farmer_schedules(
+    district: Optional[str] = Query(default=None, description="Filter by district name"),
+    status: Optional[str] = Query(default=None, description="Filter by status"),
+    priority: Optional[str] = Query(default=None, description="Filter by priority level"),
+    limit: int = Query(default=100, ge=1, le=500, description="Max results")
+):
+    """
+    Get individual farmer schedules.
+    Each farmer is assigned to a specific harvest window based on their field's NDVI data.
+    
+    Priority levels:
+    - normal: Standard farmers
+    - priority: Farmers with 15+ acres
+    - premium: Farmers with 25+ acres (get first access to machines)
+    """
+    _, predictions = get_fresh_predictions(30)
+    scheduler = get_fresh_scheduler(predictions)
+    
+    schedules_data = []
+    for schedule in scheduler.schedules:
+        if district and schedule.district.lower() != district.lower():
+            continue
+        if status and schedule.status != status:
+            continue
+        if priority and schedule.priority_level != priority:
+            continue
+        if len(schedules_data) >= limit:
+            break
+            
+        schedules_data.append({
+            "farmer_id": schedule.farmer_id,
+            "farmer_name": schedule.farmer_name,
+            "phone": schedule.phone,
+            "district": schedule.district,
+            "field_id": schedule.field_id,
+            "field_acres": schedule.field_acres,
+            "crop_type": schedule.crop_type,
+            "current_ndvi": schedule.current_ndvi,
+            "cluster_id": schedule.cluster_id,
+            "cluster_name": schedule.cluster_name,
+            "assigned_window_start": schedule.assigned_window_start.isoformat(),
+            "assigned_window_end": schedule.assigned_window_end.isoformat(),
+            "optimal_harvest_date": schedule.optimal_harvest_date.isoformat(),
+            "priority_level": schedule.priority_level,
+            "priority_booking_enabled": schedule.priority_booking_enabled,
+            "status": schedule.status,
+            "season": schedule.season
+        })
+    
+    return {
+        "generated_at": datetime.now().isoformat(),
+        "total_schedules": len(schedules_data),
+        "filters": {
+            "district": district,
+            "status": status,
+            "priority": priority
+        },
+        "schedules": schedules_data
+    }
+
+
+@app.get("/api/scheduling/gantt", tags=["Scheduling"])
+async def get_gantt_chart_data():
+    """
+    Get data for Gantt chart visualization on admin dashboard.
+    Shows clusters as time-based bars with machine allocation info.
+    
+    Used for the "Scheduling Command Center" view.
+    """
+    _, predictions = get_fresh_predictions(30)
+    scheduler = get_fresh_scheduler(predictions)
+    
+    return {
+        "generated_at": datetime.now().isoformat(),
+        "season": "Kharif 2025",
+        "gantt_data": scheduler.get_gantt_chart_data()
+    }
+
+
+@app.get("/api/scheduling/heatmap", tags=["Scheduling"])
+async def get_machine_heatmap():
+    """
+    Get machine availability heatmap data.
+    Shows machines available per date per district.
+    
+    Useful for visualizing demand vs capacity across time.
+    """
+    _, predictions = get_fresh_predictions(30)
+    scheduler = get_fresh_scheduler(predictions)
+    
+    return {
+        "generated_at": datetime.now().isoformat(),
+        "season": "Kharif 2025",
+        "heatmap_data": scheduler.get_machine_availability_matrix()
+    }
+
+
+@app.get("/api/scheduling/summary", tags=["Scheduling"])
+async def get_scheduling_summary():
+    """
+    Get scheduling summary with key statistics.
+    Overview of the entire scheduling system's state.
+    """
+    _, predictions = get_fresh_predictions(30)
+    scheduler = get_fresh_scheduler(predictions)
+    
+    return {
+        "generated_at": datetime.now().isoformat(),
+        "summary": scheduler.get_summary()
+    }
+
+
+@app.get("/api/scheduling/dashboard", tags=["Scheduling"])
+async def get_scheduling_dashboard():
+    """
+    Get complete scheduling dashboard data in a single request.
+    Combines all scheduling data for the admin "Scheduling Command Center".
+    
+    This is the main endpoint for the scheduling dashboard UI.
+    """
+    _, predictions = get_fresh_predictions(30)
+    scheduler = get_fresh_scheduler(predictions)
+    
+    return {
+        "metadata": {
+            "generated_at": datetime.now().isoformat(),
+            "region": "Punjab, Haryana, Chandigarh, Delhi-NCR",
+            "season": "Kharif 2025"
+        },
+        "summary": scheduler.get_summary(),
+        "clusters": [
+            {
+                "id": c.id,
+                "name": c.name,
+                "region": c.region,
+                "districts": c.districts,
+                "window_start": c.window_start.isoformat(),
+                "window_end": c.window_end.isoformat(),
+                "avg_ndvi": c.avg_ndvi,
+                "priority_score": c.priority_score,
+                "machines_required": c.machines_required,
+                "machines_allocated": c.machines_allocated,
+                "total_acres": c.total_acres,
+                "farmers_count": len(c.farmers),
+                "status": c.status
+            }
+            for c in scheduler.clusters
+        ],
+        "gantt_data": scheduler.get_gantt_chart_data(),
+        "heatmap_data": scheduler.get_machine_availability_matrix()
+    }
+
+
+@app.get("/api/scheduling/sms/preview", tags=["Scheduling", "SMS"])
+async def preview_sms_messages(
+    message_type: str = Query(
+        default="schedule_assigned",
+        description="Type of SMS message",
+        enum=["schedule_assigned", "reminder_3day", "booking_open", "incentive_earned"]
+    ),
+    limit: int = Query(default=10, ge=1, le=100, description="Number of messages to preview")
+):
+    """
+    Preview SMS messages that would be sent to farmers.
+    Does NOT actually send messages - for admin review only.
+    
+    Message Types:
+    - schedule_assigned: Initial window assignment notification
+    - reminder_3day: Reminder 3 days before window
+    - booking_open: When booking window opens
+    - incentive_earned: Green credits notification
+    """
+    _, predictions = get_fresh_predictions(30)
+    scheduler = get_fresh_scheduler(predictions)
+    messages = scheduler.generate_sms_messages(message_type)
+    
+    # Convert to serializable format
+    messages_data = [
+        {
+            "farmer_id": m.farmer_id,
+            "schedule_id": m.schedule_id,
+            "phone": m.phone,
+            "message_type": m.message_type,
+            "message_content": m.message_content,
+            "language": m.language,
+            "priority": m.priority,
+            "char_count": len(m.message_content),
+            "sms_segments": (len(m.message_content) // 160) + 1
+        }
+        for m in messages[:limit]
+    ]
+    
+    return {
+        "generated_at": datetime.now().isoformat(),
+        "message_type": message_type,
+        "total_messages": len(messages),
+        "preview_count": len(messages_data),
+        "estimated_cost_inr": len(messages) * 0.25,  # ~₹0.25 per SMS
+        "preview": messages_data
+    }
+
+
+@app.get("/api/scheduling/district/{district_id}", tags=["Scheduling"])
+async def get_district_schedule(district_id: str):
+    """
+    Get scheduling details for a specific district.
+    Shows which cluster the district belongs to and all farmers in it.
+    """
+    _, predictions = get_fresh_predictions(30)
+    scheduler = get_fresh_scheduler(predictions)
+    
+    result = scheduler.get_district_schedule(district_id)
+    
+    if 'error' in result:
+        raise HTTPException(status_code=404, detail=result['error'])
+    
+    return {
+        "generated_at": datetime.now().isoformat(),
+        **result
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # RUN SERVER
 # ═══════════════════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
     import uvicorn
     print("\n🌾 Starting Crop Residue Management API Server...")
-    print("📡 Endpoints available at http://localhost:8000")
-    print("📖 API Documentation at http://localhost:8000/docs")
+    print("📡 Endpoints available at http://localhost:8001")
+    print("📖 API Documentation at http://localhost:8001/docs")
+    print("📅 Scheduling API at http://localhost:8001/api/scheduling/dashboard")
     print()
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run(app, host="0.0.0.0", port=8001, reload=True)

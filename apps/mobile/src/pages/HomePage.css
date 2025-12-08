@@ -1,10 +1,11 @@
 .home-page {
   padding: 16px;
+  padding-bottom: 80px;
 }
 
 /* Welcome Section */
 .welcome-section {
-  margin-bottom: 24px;
+  margin-bottom: 16px;
 }
 
 .welcome-section h2 {
@@ -16,6 +17,56 @@
 .welcome-section p {
   color: var(--text-muted);
   font-size: 14px;
+}
+
+/* Green Status Section */
+.green-status-section {
+  margin-bottom: 16px;
+}
+
+.green-status-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.green-status-card:active {
+  transform: scale(0.98);
+}
+
+.green-status-card.certified {
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+  color: white;
+}
+
+.green-status-card.not-certified {
+  background: linear-gradient(135deg, #fef3c7 0%, #fef9c3 100%);
+  color: #92400e;
+}
+
+.green-status-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.green-status-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.green-status-label {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.green-status-credits {
+  font-size: 12px;
+  opacity: 0.9;
 }
 
 /* Stats Section */
@@ -116,6 +167,11 @@
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   cursor: pointer;
   transition: transform 0.2s;
+  position: relative;
+}
+
+.action-card.mandi {
+  background: linear-gradient(135deg, #fef3c7 0%, #fff7ed 100%);
 }
 
 .action-card:active {
@@ -124,6 +180,10 @@
 
 .action-icon {
   color: var(--primary);
+}
+
+.action-card.mandi .action-icon {
+  color: #d97706;
 }
 
 .action-card h4 {
@@ -136,6 +196,53 @@
   font-size: 13px;
   color: var(--text-muted);
   margin: 0;
+}
+
+.bonus-tag {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: #16a34a;
+  color: white;
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+/* Benefits Preview */
+.benefits-preview {
+  margin-bottom: 24px;
+}
+
+.benefits-preview h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.benefits-scroll {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.benefit-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #dcfce7 0%, #f0fdf4 100%);
+  padding: 10px 14px;
+  border-radius: 20px;
+  white-space: nowrap;
+  font-size: 13px;
+  color: #166534;
+  font-weight: 500;
+}
+
+.benefit-chip svg {
+  color: #16a34a;
 }
 
 /* Activity Section */

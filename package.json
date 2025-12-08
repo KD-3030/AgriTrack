@@ -19,7 +19,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/KD-mini/AgriTrack.git"
+    "url": "https://github.com/KD-3030/AgriTrack.git"
   },
   "keywords": [
     "agritrack",
@@ -28,6 +28,6 @@
     "machinery",
     "monitoring"
   ],
-  "author": "KD-mini",
+  "author": "KD-3030",
   "license": "MIT"
 }

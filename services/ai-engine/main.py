@@ -109,6 +109,13 @@ class MaintenanceAlert(BaseModel):
 # HEALTH & UTILITY ENDPOINTS
 # ═══════════════════════════════════════════════════════════════════
 
+from fastapi.responses import RedirectResponse
+
+@app.get("/", include_in_schema=False)
+async def root():
+    """Redirect root to API documentation"""
+    return RedirectResponse(url="/docs")
+
 @app.get("/health")
 async def health():
     db_connected = get_supabase() is not None

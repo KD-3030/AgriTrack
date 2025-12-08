@@ -4,6 +4,9 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const mqtt = require('mqtt');
+const swaggerUi = require('swagger-ui-express');
+const YAML = require('yamljs');
+const path = require('path');
 const db = require('./services/database');
 const notificationService = require('./services/notifications');
 const alertManager = require('./services/alertManager');
@@ -13,6 +16,9 @@ const maintenanceService = require('./services/maintenance');
 
 const app = express();
 const server = http.createServer(app);
+
+// Load Swagger document
+const swaggerDocument = YAML.load(path.join(__dirname, 'swagger.yaml'));
 
 // Socket.io setup
 const io = new Server(server, {
@@ -25,6 +31,17 @@ const io = new Server(server, {
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Swagger UI - API Documentation
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'AgriTrack API Documentation'
+}));
+
+// Redirect root to docs
+app.get('/', (req, res) => {
+  res.redirect('/docs');
+});
 
 // Initialize services with Supabase client after connection
 const initializeServices = () => {
@@ -51,6 +68,10 @@ const notificationRoutes = require('./routes/notifications');
 const geofenceRoutes = require('./routes/geofence');
 const fuelRoutes = require('./routes/fuel');
 const maintenanceRoutes = require('./routes/maintenance');
+const farmerRoutes = require('./routes/farmers');
+const schedulingRoutes = require('./routes/scheduling');
+const authRoutes = require('./routes/auth');
+const mandiRoutes = require('./routes/mandi');
 
 app.use('/api/v1/machines', machineRoutes);
 app.use('/api/v1/bookings', bookingRoutes);
@@ -60,6 +81,14 @@ app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/geofences', geofenceRoutes);
 app.use('/api/v1/fuel', fuelRoutes);
 app.use('/api/v1/maintenance', maintenanceRoutes);
+app.use('/api/v1/farmers', farmerRoutes);
+app.use('/api/v1/scheduling', schedulingRoutes);
+app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/mandi', mandiRoutes);
+
+// Also mount auth and mandi at /api for web compatibility
+app.use('/api/auth', authRoutes);
+app.use('/api/mandi', mandiRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { Sidebar } from '@/components/layout/sidebar'
 import { useSocket } from '@/hooks/use-socket'
 import { 
   ArrowLeft, 
@@ -93,19 +92,16 @@ export default function MachineDetailPage() {
 
   if (!machine) {
     return (
-      <div className="flex h-screen bg-background">
-        <Sidebar />
-        <main className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-4 text-muted-foreground">
-              {connected ? `Waiting for machine ${machineId}...` : 'Connecting to server...'}
-            </p>
-            <Link href="/dashboard/machines" className="mt-4 text-primary hover:underline inline-block">
-              ← Back to Machines
-            </Link>
-          </div>
-        </main>
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-4 text-muted-foreground">
+            {connected ? `Waiting for machine ${machineId}...` : 'Connecting to server...'}
+          </p>
+          <Link href="/dashboard/machines" className="mt-4 text-primary hover:underline inline-block">
+            ← Back to Machines
+          </Link>
+        </div>
       </div>
     )
   }
@@ -117,11 +113,7 @@ export default function MachineDetailPage() {
   ).toFixed(4)
 
   return (
-    <div className="flex h-screen bg-background">
-      <Sidebar />
-      
-      <main className="flex-1 overflow-auto">
-        <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -319,13 +311,11 @@ export default function MachineDetailPage() {
             </div>
           </div>
 
-          {/* Last Update */}
-          <div className="text-center text-sm text-muted-foreground">
-            <Clock className="w-4 h-4 inline mr-1" />
-            Last update: {new Date(machine.timestamp).toLocaleString()}
-          </div>
-        </div>
-      </main>
+      {/* Last Update */}
+      <div className="text-center text-sm text-muted-foreground">
+        <Clock className="w-4 h-4 inline mr-1" />
+        Last update: {new Date(machine.timestamp).toLocaleString()}
+      </div>
     </div>
   )
 }

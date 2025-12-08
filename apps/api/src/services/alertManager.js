@@ -25,19 +25,22 @@ class AlertManager {
     };
 
     // SMS recipients for different alert types
+    // NOTE: Machine fault SMS disabled to save Twilio credits
+    // SMS is only used for scheduling/advisory notifications to farmers
     this.alertConfig = {
-      overheat: { sms: true, push: true, severity: 'critical' },
-      vibration: { sms: false, push: true, severity: 'warning' },
-      geofence: { sms: true, push: true, severity: 'warning' },
-      fuel_low: { sms: false, push: true, severity: 'warning' },
-      fuel_critical: { sms: true, push: true, severity: 'critical' },
-      maintenance: { sms: true, push: true, severity: 'info' },
-      anomaly: { sms: true, push: true, severity: 'critical' },
+      overheat: { sms: false, push: true, severity: 'critical' },      // SMS disabled - dashboard only
+      vibration: { sms: false, push: true, severity: 'warning' },      // SMS disabled - dashboard only
+      geofence: { sms: false, push: true, severity: 'warning' },       // SMS disabled - dashboard only
+      fuel_low: { sms: false, push: true, severity: 'warning' },       // SMS disabled - dashboard only
+      fuel_critical: { sms: false, push: true, severity: 'critical' }, // SMS disabled - dashboard only
+      maintenance: { sms: false, push: true, severity: 'info' },       // SMS disabled - dashboard only
+      anomaly: { sms: false, push: true, severity: 'critical' },       // SMS disabled - dashboard only
       default: { sms: false, push: true, severity: 'info' }
     };
 
-    // Admin phone for critical alerts (fallback)
-    this.adminPhone = process.env.ADMIN_PHONE || null;
+    // Admin phone for critical alerts - DISABLED for machine faults
+    // Only used for scheduling system now
+    this.adminPhone = null; // Disabled: process.env.ADMIN_PHONE
   }
 
   setSupabase(client) {
@@ -165,10 +168,10 @@ class AlertManager {
       );
     }
 
-    // For critical alerts, also notify admin
-    if (severity === 'critical' && this.adminPhone && this.adminPhone !== owner.phone) {
-      await notificationService.sendSMS(this.adminPhone, `[ADMIN] ${smsBody}`);
-    }
+    // For critical alerts, also notify admin - DISABLED for machine faults
+    // if (severity === 'critical' && this.adminPhone && this.adminPhone !== owner.phone) {
+    //   await notificationService.sendSMS(this.adminPhone, `[ADMIN] ${smsBody}`);
+    // }
 
     return { sent: true, results };
   }

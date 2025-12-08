@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Sidebar } from '@/components/layout/sidebar'
 import { useSocket, type MachineData } from '@/hooks/use-socket'
 import { 
   Tractor, 
@@ -55,11 +54,7 @@ export default function MachinesPage() {
   }
 
   return (
-    <div className="flex h-screen bg-background">
-      <Sidebar />
-      
-      <main className="flex-1 overflow-auto">
-        <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between">
             <div>
@@ -125,8 +120,6 @@ export default function MachinesPage() {
             </div>
           )}
         </div>
-      </main>
-    </div>
   )
 }
 

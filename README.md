@@ -13,7 +13,7 @@
 ### 1. Clone & Setup Environment
 
 ```bash
-git clone https://github.com/KD-mini/AgriTrack.git
+git clone https://github.com/KD-3030/AgriTrack.git
 cd AgriTrack
 cp .env.example .env
 # Edit .env with your Supabase and Clerk credentials
@@ -329,5 +329,6 @@ PUBLISH_INTERVAL=2.0
 
 ---
 
-Made with ❤️ for Smart India Hackathon 2025#   A g r i T r a c k  
- 
+Made with ❤️ for Smart India Hackathon 2025
+
+
