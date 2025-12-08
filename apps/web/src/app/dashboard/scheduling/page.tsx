@@ -222,14 +222,6 @@ export default function SchedulingPage() {
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <button
-                onClick={() => fetchDashboard()}
-                disabled={refreshing}
-                className="flex items-center gap-2 px-4 py-2 bg-secondary hover:bg-secondary/80 rounded-lg transition-colors"
-              >
-                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-                Refresh
-              </button>
               <button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors">
                 <Download className="w-4 h-4" />
                 Export
@@ -373,7 +365,8 @@ export default function SchedulingPage() {
                   region: item.region,
                   total_acres: item.total_acres,
                   priority_score: item.priority,
-                  avg_ndvi: item.avg_ndvi
+                  avg_ndvi: item.avg_ndvi,
+                  districts: item.districts || []
                 }))}
                 summary={summary}
                 heatmapData={dashboardData?.heatmap_data}
