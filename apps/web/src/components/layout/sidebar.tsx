@@ -6,19 +6,15 @@ import {
   LayoutDashboard, 
   Tractor, 
   Calendar, 
-  BarChart3, 
   Settings,
   Bell,
   Cpu,
   Wheat,
   Brain,
   FileText,
-  Activity,
   CalendarClock,
-  Store,
   LogOut,
-  Home,
-  Award
+  Home
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -26,8 +22,6 @@ const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/dashboard/machines', label: 'Machines', icon: Tractor },
   { href: '/dashboard/scheduling', label: 'Scheduling', icon: CalendarClock },
-  { href: '/dashboard/marketplace', label: 'Marketplace', icon: Store },
-  { href: '/dashboard/green-certificates', label: 'Green Certificates', icon: Award },
   { href: '/dashboard/analytics', label: 'AI Analytics', icon: Brain },
   { href: '/dashboard/reports', label: 'Live Reports', icon: FileText },
   { href: '/dashboard/bookings', label: 'Bookings', icon: Calendar },
@@ -47,19 +41,19 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-64 bg-card border-r flex flex-col">
+    <aside className="w-64 bg-gradient-to-b from-emerald-900 via-emerald-800 to-teal-900 flex flex-col shadow-xl">
       {/* Logo */}
-      <div className="h-16 flex items-center px-6 border-b">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-            <Tractor className="w-5 h-5 text-primary-foreground" />
+      <div className="h-16 flex items-center px-6 border-b border-emerald-700/50">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-gradient-to-br from-emerald-400 to-teal-400 rounded-xl flex items-center justify-center shadow-lg">
+            <Tractor className="w-6 h-6 text-emerald-900" />
           </div>
-          <span className="font-bold text-xl">AgriTrack</span>
+          <span className="font-bold text-xl text-white">AgriTrack</span>
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1">
+      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
         {navItems.map(item => {
           const Icon = item.icon
           const isActive = pathname === item.href
@@ -69,10 +63,10 @@ export function Sidebar() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200",
                 isActive 
-                  ? "bg-primary text-primary-foreground" 
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  ? "bg-gradient-to-r from-emerald-400 to-teal-400 text-emerald-900 shadow-lg shadow-emerald-500/25" 
+                  : "text-emerald-100/80 hover:text-white hover:bg-emerald-700/50"
               )}
             >
               <Icon className="w-5 h-5" />
@@ -83,29 +77,29 @@ export function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t space-y-1">
+      <div className="p-4 border-t border-emerald-700/50 space-y-1">
         <Link
           href="/"
-          className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-emerald-100/80 hover:text-white hover:bg-emerald-700/50 transition-all duration-200"
         >
           <Home className="w-5 h-5" />
           Home
         </Link>
         <Link
           href="/dashboard/settings"
-          className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-emerald-100/80 hover:text-white hover:bg-emerald-700/50 transition-all duration-200"
         >
           <Settings className="w-5 h-5" />
           Settings
         </Link>
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-red-500 hover:bg-red-50 transition-colors"
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-red-300 hover:bg-red-500/20 hover:text-red-200 transition-all duration-200"
         >
           <LogOut className="w-5 h-5" />
           Logout
         </button>
-        <div className="mt-4 px-3 text-xs text-muted-foreground">
+        <div className="mt-4 px-4 text-xs text-emerald-300/60">
           <p>SIH 2025 | v2.1</p>
         </div>
       </div>

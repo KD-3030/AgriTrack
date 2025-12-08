@@ -565,9 +565,9 @@ function BookMachineContent() {
       const match = text.match(pattern);
       if (match && match[1]) {
         let loc = match[1].trim();
-        // Remove Bengali locative suffixes
-        loc = loc.replace(/[েতয়]$/u, '');
-        loc = loc.replace(/মে$/u, 'ম');
+        // Remove Bengali locative suffixes (using character codes instead of unicode flag)
+        loc = loc.replace(/[\u09C7\u09A4\u09DF]$/, '');
+        loc = loc.replace(/\u09AE\u09C7$/, '\u09AE');
         if (loc.length > 1 && !/^\d+$/.test(loc)) {
           return capitalizeWords(loc);
         }

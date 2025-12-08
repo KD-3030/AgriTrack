@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { 
   Calendar, 
+  CalendarDays,
   Users, 
   Tractor, 
   AlertTriangle, 
@@ -19,6 +20,7 @@ import {
   MapPin
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { SchedulingCalendar } from '@/components/scheduling/SchedulingCalendar';
 
 // Dynamic import for Leaflet-based ClusterMap (no SSR)
 const ClusterMap = dynamic(
@@ -331,8 +333,12 @@ export default function SchedulingPage() {
           </div>
 
           {/* Tabs for different views */}
-          <Tabs defaultValue="map" className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
+          <Tabs defaultValue="calendar" className="w-full">
+            <TabsList className="grid w-full grid-cols-5">
+              <TabsTrigger value="calendar">
+                <CalendarDays className="w-4 h-4 mr-2" />
+                Calendar
+              </TabsTrigger>
               <TabsTrigger value="map">
                 <MapPin className="w-4 h-4 mr-2" />
                 Map View
@@ -350,6 +356,33 @@ export default function SchedulingPage() {
                 SMS Advisory
               </TabsTrigger>
             </TabsList>
+
+            {/* Calendar View */}
+            <TabsContent value="calendar" className="mt-4">
+              <SchedulingCalendar 
+                events={ganttData.map(item => ({
+                  id: item.id,
+                  name: item.name,
+                  start: item.start || item.startDate,
+                  end: item.end || item.endDate,
+                  farmers_count: item.farmers_count,
+                  machines_allocated: item.machines_allocated,
+                  machines_required: item.machines_required,
+                  status: item.status,
+                  color: item.color,
+                  region: item.region,
+                  total_acres: item.total_acres,
+                  priority_score: item.priority,
+                  avg_ndvi: item.avg_ndvi
+                }))}
+                summary={summary}
+                heatmapData={dashboardData?.heatmap_data}
+                onEventClick={(event) => {
+                  const cluster = clusters.find(c => c.id === event.id);
+                  if (cluster) setSelectedCluster(cluster);
+                }}
+              />
+            </TabsContent>
 
             {/* Map View */}
             <TabsContent value="map" className="mt-4">

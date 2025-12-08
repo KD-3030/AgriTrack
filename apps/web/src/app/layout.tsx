@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Image from 'next/image'
 import './globals.css'
 // import { ClerkProvider } from '@clerk/nextjs'
 import { Toaster } from '@/components/ui/toaster'
@@ -24,6 +25,16 @@ export default function RootLayout({
         />
       </head>
       <body className="font-sans antialiased">
+        {/* Global Watermark */}
+        <div className="fixed inset-0 pointer-events-none z-[-1]">
+          <Image
+            src="/assets/watermark.jpg"
+            alt=""
+            fill
+            className="object-cover opacity-[0.03]"
+            priority
+          />
+        </div>
         {children}
         <Toaster />
       </body>
