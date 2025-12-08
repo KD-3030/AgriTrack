@@ -1,0 +1,194 @@
+.home-page {
+  padding: 16px;
+}
+
+/* Welcome Section */
+.welcome-section {
+  margin-bottom: 24px;
+}
+
+.welcome-section h2 {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.welcome-section p {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+/* Stats Section */
+.stats-section {
+  margin-bottom: 24px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.stat-card {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.stat-card:active {
+  transform: scale(0.98);
+}
+
+.stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stat-icon.active {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.stat-icon.idle {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.stat-icon.alert {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.stat-icon.booking {
+  background: #e0e7ff;
+  color: #4f46e5;
+}
+
+.stat-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Actions Section */
+.actions-section {
+  margin-bottom: 24px;
+}
+
+.actions-section h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.action-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.action-card {
+  background: white;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.action-card:active {
+  transform: scale(0.98);
+}
+
+.action-icon {
+  color: var(--primary);
+}
+
+.action-card h4 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+}
+
+.action-card p {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* Activity Section */
+.activity-section h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.activity-list {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.activity-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.activity-item:last-child {
+  border-bottom: none;
+}
+
+.activity-item:active {
+  background: var(--background);
+}
+
+.activity-icon {
+  font-size: 20px;
+}
+
+.activity-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.activity-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.activity-message {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

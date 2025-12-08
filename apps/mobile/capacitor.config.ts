@@ -1,0 +1,9 @@
+import type { CapacitorConfig } from '@capacitor/cli';
+
+const config: CapacitorConfig = {
+  appId: 'com.agritrack.farmer',
+  appName: 'AgriTrack',
+  webDir: 'dist'
+};
+
+export default config;
