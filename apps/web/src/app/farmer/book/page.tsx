@@ -315,41 +315,20 @@ function BookMachineContent() {
     // Update extracted fields state
     const newExtractedFields = { ...extractedFields };
     
-    // 1. Extract Crop Type
+    // 1. Extract Crop Type and Auto-Select Machine
     if (extracted.crop) {
       setCropType(extracted.crop.id);
       setSelectedCrop(extracted.crop);
       newExtractedFields.crop = true;
       filledFields.push('फसल/Crop');
       
-      // Auto-select first recommended machine if available
-      if (extracted.crop.machines.length > 0 && machines.length > 0) {
-        const recommendedMachine = machines.find(m => 
-          extracted.crop!.machines.some(rm => 
-            m.name?.toLowerCase().includes(rm.toLowerCase()) ||
-            m.id.toLowerCase().includes(rm.toLowerCase())
-          )
-        );
-        if (recommendedMachine) {
-          setSelectedMachine(recommendedMachine.id);
-          newExtractedFields.machine = true;
-          filledFields.push('मशीन/Machine');
-        }
-      }
+      // Auto-select the best available machine for this crop
+      autoSelectMachineForCrop(extracted.crop);
+      newExtractedFields.machine = true;
+      filledFields.push('मशीन/Machine');
     }
     
-    // 2. Extract Machine (if explicitly mentioned)
-    if (extracted.machine && !newExtractedFields.machine) {
-      const matchedMachine = machines.find(m => 
-        m.name?.toLowerCase().includes(extracted.machine!.toLowerCase()) ||
-        m.id.toLowerCase().includes(extracted.machine!.toLowerCase())
-      );
-      if (matchedMachine) {
-        setSelectedMachine(matchedMachine.id);
-        newExtractedFields.machine = true;
-        filledFields.push('मशीन/Machine');
-      }
-    }
+    // 2. Machine is auto-selected based on crop - no manual selection needed
     
     // 3. Extract Name
     if (extracted.name) {
@@ -565,9 +544,9 @@ function BookMachineContent() {
       const match = text.match(pattern);
       if (match && match[1]) {
         let loc = match[1].trim();
-        // Remove Bengali locative suffixes (using character codes instead of unicode flag)
-        loc = loc.replace(/[\u09C7\u09A4\u09DF]$/, '');
-        loc = loc.replace(/\u09AE\u09C7$/, '\u09AE');
+        // Remove Bengali locative suffixes (ে, ত, য়, মে)
+        loc = loc.replace(/[েতয়]$/, '');
+        loc = loc.replace(/মে$/, 'ম');
         if (loc.length > 1 && !/^\d+$/.test(loc)) {
           return capitalizeWords(loc);
         }
@@ -750,6 +729,35 @@ function BookMachineContent() {
       crop.machines.some(machine => machine.toLowerCase().includes(search))
     );
   });
+
+  // Auto-select the best available machine for a crop
+  const autoSelectMachineForCrop = (crop: CropData) => {
+    if (machines.length === 0) {
+      // If no machines loaded yet, just select the first one when available
+      console.log('No machines available yet, will select when loaded');
+      return;
+    }
+    
+    // Try to find a machine that matches the recommended machines for this crop
+    for (const recommendedMachine of crop.machines) {
+      const matchedMachine = machines.find(m => 
+        m.name?.toLowerCase().includes(recommendedMachine.toLowerCase()) ||
+        m.id.toLowerCase().includes(recommendedMachine.toLowerCase())
+      );
+      if (matchedMachine) {
+        setSelectedMachine(matchedMachine.id);
+        console.log(`Auto-selected machine: ${matchedMachine.name || matchedMachine.id} for crop: ${crop.names.en}`);
+        return;
+      }
+    }
+    
+    // If no exact match, select the first available (idle) machine
+    const availableMachine = machines.find(m => m.status === 'idle' || m.status === 'available') || machines[0];
+    if (availableMachine) {
+      setSelectedMachine(availableMachine.id);
+      console.log(`Auto-selected first available machine: ${availableMachine.name || availableMachine.id}`);
+    }
+  };
 
   // Text-to-Speech function
   const speak = (text: string, lang: string = 'hi-IN') => {
@@ -1095,8 +1103,9 @@ function BookMachineContent() {
                     onClick={() => {
                       setCropType(crop.id);
                       setSelectedCrop(crop);
-                      setExtractedFields(prev => ({ ...prev, crop: true }));
-                      speak(`${crop.names.hi} चुना गया। ${crop.machines[0]} मशीन अच्छी रहेगी।`, voiceLanguage);
+                      autoSelectMachineForCrop(crop);
+                      setExtractedFields(prev => ({ ...prev, crop: true, machine: true }));
+                      speak(`${crop.names.hi} चुना गया। ${crop.machines[0]} मशीन आपके लिए चुनी गई।`, voiceLanguage);
                     }}
                     className={`px-3 py-1.5 text-xs rounded-lg border transition-colors flex items-center gap-1 ${
                       cropType === crop.id
@@ -1187,7 +1196,10 @@ function BookMachineContent() {
                       onClick={() => {
                         setCropType(crop.id);
                         setSelectedCrop(crop);
+                        autoSelectMachineForCrop(crop);
+                        setExtractedFields(prev => ({ ...prev, crop: true, machine: true }));
                         setShowCropGuide(false);
+                        speak(`${crop.names.hi} चुना गया। मशीन अपने आप चुनी गई।`, 'hi-IN');
                       }}
                       className={`p-3 border rounded-lg cursor-pointer transition-all hover:shadow-md ${
                         selectedCrop?.id === crop.id ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-green-300'
@@ -1227,7 +1239,7 @@ function BookMachineContent() {
           <div>
             <label className="block text-sm font-medium mb-2">
               <Leaf className="inline mr-1" size={16} />
-              Crop Type | फसल का प्रकार
+              Crop Type | फसल का प्रकार <span className="text-red-500">*</span>
             </label>
             <select
               value={cropType}
@@ -1236,9 +1248,12 @@ function BookMachineContent() {
                 setCropType(e.target.value);
                 if (crop) {
                   setSelectedCrop(crop);
-                  speak(`${crop.names.hi} के लिए ${crop.machines[0]} अच्छा रहेगा।`, 'hi-IN');
+                  autoSelectMachineForCrop(crop);
+                  setExtractedFields(prev => ({ ...prev, crop: true, machine: true }));
+                  speak(`${crop.names.hi} चुना गया। ${crop.machines[0]} मशीन आपके लिए चुनी गई है।`, 'hi-IN');
                 }
               }}
+              required
               className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
             >
               <option value="">-- Select Crop / फसल चुनें --</option>
@@ -1250,29 +1265,51 @@ function BookMachineContent() {
             </select>
           </div>
 
-          {/* Machine Selection */}
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              Select Machine <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={selectedMachine}
-              onChange={(e) => setSelectedMachine(e.target.value)}
-              required
-              className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            >
-              <option value="">-- Select Machine --</option>
-              {machines.map((machine: any) => (
-                <option key={machine.id} value={machine.id}>
-                  {machine.name || machine.id} - {machine.state}
-                  {machine.distance ? ` (${machine.distance.km}km away, ETA: ${machine.distance.eta.formatted})` : ''}
-                </option>
-              ))}
-            </select>
-            {machines.length === 0 && (
-              <p className="text-sm text-gray-500 mt-2">Loading available machines...</p>
-            )}
-          </div>
+          {/* Auto-Selected Machine Display (based on crop) */}
+          {selectedMachine && (
+            <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Tractor className="text-blue-600" size={20} />
+                <span className="font-semibold text-blue-800">Auto-Selected Machine | चुनी गई मशीन</span>
+                <CheckCircle className="text-green-500" size={16} />
+              </div>
+              <div className="bg-white rounded-lg p-3">
+                {(() => {
+                  const machine = machines.find(m => m.id === selectedMachine);
+                  if (machine) {
+                    return (
+                      <div>
+                        <p className="font-bold text-gray-800">{machine.name || machine.id}</p>
+                        <p className="text-sm text-gray-600">
+                          Status: <span className={`font-medium ${machine.status === 'idle' || machine.status === 'available' ? 'text-green-600' : 'text-blue-600'}`}>
+                            {machine.status || 'Available'}
+                          </span>
+                        </p>
+                        {selectedCrop && (
+                          <p className="text-xs text-blue-600 mt-1">
+                            ✓ Best machine for {selectedCrop.names.hi} ({selectedCrop.names.en})
+                          </p>
+                        )}
+                      </div>
+                    );
+                  }
+                  return <p className="text-gray-500">Machine selected</p>;
+                })()}
+              </div>
+            </div>
+          )}
+
+          {!selectedMachine && selectedCrop && (
+            <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-3 text-sm text-yellow-800">
+              ⏳ Selecting best machine for {selectedCrop.names.hi}...
+            </div>
+          )}
+
+          {!selectedCrop && (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-600">
+              👆 Select a crop above or use voice to automatically select the best machine | फसल चुनें, मशीन अपने आप चुन ली जाएगी
+            </div>
+          )}
 
           {/* Farmer Name */}
           <div>
