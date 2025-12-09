@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Tractor, BookOpen, Activity, Mic, MapPin, Clock, LogOut, Globe, ChevronRight, Sparkles } from 'lucide-react';
+import { Tractor, BookOpen, Activity, Mic, MapPin, Clock, LogOut, Globe, ChevronRight } from 'lucide-react';
 import io from 'socket.io-client';
 
 // Language translations
@@ -277,10 +277,7 @@ export default function FarmerHome() {
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
         {/* Welcome Banner */}
         <div className="bg-gradient-to-r from-emerald-500/10 to-teal-500/10 rounded-2xl p-6 border border-emerald-200/50">
-          <div className="flex items-center gap-2 mb-1">
-            <Sparkles size={20} className="text-emerald-600" />
-            <h2 className="text-xl font-semibold text-gray-800">{t.welcome}</h2>
-          </div>
+          <h2 className="text-xl font-semibold text-gray-800">{t.welcome}</h2>
         </div>
 
         {/* Quick Actions */}
@@ -396,17 +393,6 @@ export default function FarmerHome() {
                 ))}
               </div>
             )}
-          </div>
-        </div>
-
-        {/* Voice Assistant Hint */}
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-5 border border-blue-100 flex items-start gap-4">
-          <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center flex-shrink-0">
-            <Mic className="text-white" size={20} />
-          </div>
-          <div>
-            <h3 className="font-semibold text-gray-800">{t.voiceAssistant}</h3>
-            <p className="text-sm text-gray-600 mt-1">{t.voiceHint}</p>
           </div>
         </div>
       </div>
