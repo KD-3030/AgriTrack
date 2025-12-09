@@ -189,6 +189,30 @@ declare global {
   }
 }
 
+interface FarmerProfile {
+  id: string;
+  full_name: string;
+  phone: string;
+  alternate_phone?: string;
+  email?: string;
+  address_line1?: string;
+  address_line2?: string;
+  village?: string;
+  district: string;
+  state: string;
+  pincode?: string;
+  farming_experience_years?: number;
+  primary_crops?: string[];
+  fields?: {
+    id: string;
+    name: string;
+    area_acres: number;
+    current_crop?: string;
+    latitude?: number;
+    longitude?: number;
+  }[];
+}
+
 function BookMachineContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -220,6 +244,125 @@ function BookMachineContent() {
   }>({ crop: false, machine: false, name: false, phone: false, acres: false, location: false });
   const recognitionRef = useRef<ISpeechRecognition | null>(null);
   const transcriptRef = useRef<string>('');
+  
+  // Farmer profile for autofill
+  const [farmerProfile, setFarmerProfile] = useState<FarmerProfile | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [farmerId, setFarmerId] = useState<string>('');
+
+  // Fetch farmer profile by phone number
+  const fetchFarmerByPhone = async (phone: string) => {
+    if (!phone || phone.length < 10) return;
+    
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (cleanPhone.length < 10) return;
+    
+    setIsLoadingProfile(true);
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/v1/farmers/phone/${cleanPhone}`
+      );
+      
+      if (response.ok) {
+        const data: FarmerProfile = await response.json();
+        setFarmerProfile(data);
+        setFarmerId(data.id);
+        
+        // Autofill form fields
+        if (data.full_name && !farmerName) {
+          setFarmerName(data.full_name);
+          setExtractedFields(prev => ({ ...prev, name: true }));
+        }
+        if (data.village && !location) {
+          setLocation(`${data.village}, ${data.district}`);
+          setExtractedFields(prev => ({ ...prev, location: true }));
+        }
+        if (data.fields && data.fields.length > 0) {
+          const totalAcres = data.fields.reduce((sum, f) => sum + (f.area_acres || 0), 0);
+          if (!acres) {
+            setAcres(totalAcres.toString());
+            setExtractedFields(prev => ({ ...prev, acres: true }));
+          }
+          // Set crop from first field if available
+          if (data.fields[0].current_crop && !cropType) {
+            setCropType(data.fields[0].current_crop);
+            setExtractedFields(prev => ({ ...prev, crop: true }));
+          }
+        }
+        if (data.primary_crops && data.primary_crops.length > 0 && !cropType) {
+          setCropType(data.primary_crops[0]);
+          setExtractedFields(prev => ({ ...prev, crop: true }));
+        }
+      } else {
+        setFarmerProfile(null);
+        setFarmerId('');
+      }
+    } catch (error) {
+      console.error('Error fetching farmer profile:', error);
+      setFarmerProfile(null);
+    } finally {
+      setIsLoadingProfile(false);
+    }
+  };
+
+  // Debounce phone lookup
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (farmerPhone && farmerPhone.length >= 10) {
+        fetchFarmerByPhone(farmerPhone);
+      }
+    }, 500);
+    
+    return () => clearTimeout(timeoutId);
+  }, [farmerPhone]);
+
+  // Auto-fetch logged-in farmer's profile on page load
+  useEffect(() => {
+    const loadLoggedInFarmer = async () => {
+      try {
+        const storedUser = localStorage.getItem('agritrack_user');
+        if (storedUser) {
+          const user = JSON.parse(storedUser);
+          if (user.phone) {
+            // Set the phone number and trigger autofill
+            setFarmerPhone(user.phone.replace('+91', '').replace(/\s/g, ''));
+            // Also set name immediately if available
+            if (user.name && !farmerName) {
+              setFarmerName(user.name);
+              setExtractedFields(prev => ({ ...prev, name: true }));
+            }
+            // Set location if available
+            if (user.village && user.district && !location) {
+              setLocation(`${user.village}, ${user.district}`);
+              setExtractedFields(prev => ({ ...prev, location: true }));
+            }
+            // Set acres if available - check multiple field names
+            const farmSize = user.farm_size || user.farmSize || user.acres || user.total_acres;
+            if (farmSize && !acres) {
+              setAcres(farmSize.toString());
+              setExtractedFields(prev => ({ ...prev, acres: true }));
+            }
+            // Set crop if available
+            if (user.crops && user.crops.length > 0 && !cropType) {
+              const primaryCrop = user.crops[0].toLowerCase();
+              setCropType(primaryCrop);
+              // Find matching crop data
+              const cropData = CROP_LOOKUP[primaryCrop];
+              if (cropData) {
+                setSelectedCrop(cropData);
+                autoSelectMachineForCrop(cropData);
+              }
+              setExtractedFields(prev => ({ ...prev, crop: true }));
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error loading logged-in farmer data:', err);
+      }
+    };
+    
+    loadLoggedInFarmer();
+  }, []);
 
   useEffect(() => {
     fetchMachines();
@@ -378,6 +521,21 @@ function BookMachineContent() {
       } else if (lowerCommand.includes('clear') || lowerCommand.includes('reset') || lowerCommand.includes('साफ') || lowerCommand.includes('ਸਾਫ਼')) {
         clearForm();
         speak(getLocalizedText('cleared', detectedLang), detectedLang);
+      } else if (
+        lowerCommand.includes('autofill') || 
+        lowerCommand.includes('auto fill') ||
+        lowerCommand.includes('मेरा विवरण') || 
+        lowerCommand.includes('मेरी जानकारी') ||
+        lowerCommand.includes('আমার তথ্য') ||
+        lowerCommand.includes('আমার বিবরণ') ||
+        lowerCommand.includes('ਮੇਰੀ ਜਾਣਕਾਰੀ') ||
+        lowerCommand.includes('fill my details') ||
+        lowerCommand.includes('my details') ||
+        lowerCommand.includes('my info') ||
+        lowerCommand.includes('মেরা ডিটেইলস')
+      ) {
+        handleAutofillFromProfile();
+        speak(getLocalizedText('autofilling', detectedLang), detectedLang);
       } else {
         speak(getLocalizedText('notUnderstood', detectedLang), detectedLang);
       }
@@ -616,7 +774,86 @@ function BookMachineContent() {
     setCropType('');
     setSelectedCrop(null);
     setSelectedMachine('');
+    setFarmerProfile(null);
+    setFarmerId('');
     setExtractedFields({ crop: false, machine: false, name: false, phone: false, acres: false, location: false });
+  };
+
+  // Handle autofill from profile (voice command or button)
+  const handleAutofillFromProfile = async () => {
+    // First try from logged-in user in localStorage
+    try {
+      const storedUser = localStorage.getItem('agritrack_user');
+      if (storedUser) {
+        const user = JSON.parse(storedUser);
+        let filled = false;
+        
+        if (user.phone) {
+          const cleanPhone = user.phone.replace('+91', '').replace(/\s/g, '');
+          setFarmerPhone(cleanPhone);
+          setExtractedFields(prev => ({ ...prev, phone: true }));
+          filled = true;
+        }
+        
+        if (user.name) {
+          setFarmerName(user.name);
+          setExtractedFields(prev => ({ ...prev, name: true }));
+          filled = true;
+        }
+        
+        if (user.village && user.district) {
+          setLocation(`${user.village}, ${user.district}`);
+          setExtractedFields(prev => ({ ...prev, location: true }));
+          filled = true;
+        }
+        
+        // Check both farm_size and farmSize (handle different naming conventions)
+        const farmSize = user.farm_size || user.farmSize || user.acres || user.total_acres;
+        if (farmSize) {
+          setAcres(farmSize.toString());
+          setExtractedFields(prev => ({ ...prev, acres: true }));
+          filled = true;
+        }
+        
+        if (user.crops && user.crops.length > 0) {
+          const primaryCrop = user.crops[0].toLowerCase();
+          setCropType(primaryCrop);
+          const cropData = CROP_LOOKUP[primaryCrop];
+          if (cropData) {
+            setSelectedCrop(cropData);
+            autoSelectMachineForCrop(cropData);
+            setExtractedFields(prev => ({ ...prev, machine: true }));
+          }
+          setExtractedFields(prev => ({ ...prev, crop: true }));
+          filled = true;
+        }
+        
+        // If farm_size not in localStorage, try fetching from database
+        if (!farmSize && user.phone) {
+          const cleanPhone = user.phone.replace('+91', '').replace(/\s/g, '');
+          await fetchFarmerByPhone(cleanPhone);
+        }
+        
+        if (filled) {
+          speak(getLocalizedText('profileFilled', voiceLanguage), voiceLanguage);
+          return;
+        }
+      }
+      
+      // Fallback: try to fetch from database if we have a phone
+      if (farmerPhone) {
+        await fetchFarmerByPhone(farmerPhone);
+        // After fetching, check if farmerProfile has fields with acres
+        speak(getLocalizedText('profileFilled', voiceLanguage), voiceLanguage);
+        return;
+      }
+      
+      // No profile found
+      speak(getLocalizedText('noProfile', voiceLanguage), voiceLanguage);
+    } catch (err) {
+      console.error('Error in autofill:', err);
+      speak(getLocalizedText('noProfile', voiceLanguage), voiceLanguage);
+    }
   };
 
   const getLocalizedText = (key: string, lang: string): string => {
@@ -650,6 +887,24 @@ function BookMachineContent() {
         'en-IN': 'I did not understand. Please try again.',
         'pa-IN': 'ਮੈਨੂੰ ਸਮਝ ਨਹੀਂ ਆਇਆ। ਕਿਰਪਾ ਕਰਕੇ ਦੁਬਾਰਾ ਬੋਲੋ।',
         'bn-IN': 'আমি বুঝতে পারিনি। অনুগ্রহ করে আবার বলুন।',
+      },
+      autofilling: {
+        'hi-IN': 'आपका विवरण भर रहा हूं।',
+        'en-IN': 'Filling your details from profile.',
+        'pa-IN': 'ਤੁਹਾਡਾ ਵੇਰਵਾ ਭਰ ਰਿਹਾ ਹਾਂ।',
+        'bn-IN': 'আপনার তথ্য পূরণ করছি।',
+      },
+      profileFilled: {
+        'hi-IN': 'आपका विवरण भर दिया गया है।',
+        'en-IN': 'Your details have been filled from your profile.',
+        'pa-IN': 'ਤੁਹਾਡਾ ਵੇਰਵਾ ਭਰ ਦਿੱਤਾ ਗਿਆ ਹੈ।',
+        'bn-IN': 'আপনার তথ্য পূরণ করা হয়েছে।',
+      },
+      noProfile: {
+        'hi-IN': 'आपका प्रोफ़ाइल नहीं मिला। कृपया विवरण बोलें।',
+        'en-IN': 'Profile not found. Please speak your details.',
+        'pa-IN': 'ਤੁਹਾਡਾ ਪ੍ਰੋਫ਼ਾਈਲ ਨਹੀਂ ਮਿਲਿਆ। ਕਿਰਪਾ ਕਰਕੇ ਵੇਰਵੇ ਬੋਲੋ।',
+        'bn-IN': 'প্রোফাইল পাওয়া যায়নি। অনুগ্রহ করে আপনার তথ্য বলুন।',
       },
     };
     return texts[key]?.[lang] || texts[key]?.['en-IN'] || '';
@@ -868,12 +1123,15 @@ function BookMachineContent() {
 
     const bookingData = {
       machine_id: selectedMachine,
+      farmer_id: farmerId || undefined, // Include farmer ID if profile found
       farmer_name: farmerName,
       farmer_phone: farmerPhone,
       acres: parseFloat(acres),
       location: location,
+      crop_type: cropType || undefined,
       timestamp: Date.now(),
-      status: 'pending'
+      status: 'pending',
+      booking_source: 'web'
     };
 
     try {
@@ -1121,6 +1379,45 @@ function BookMachineContent() {
             </div>
           </div>
 
+          {/* Autofill from Profile - Separate Prominent Section */}
+          <div className="bg-gradient-to-r from-purple-50 via-pink-50 to-orange-50 border-2 border-purple-300 rounded-xl p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white text-xl shadow-lg">
+                  ✨
+                </div>
+                <div>
+                  <h3 className="font-bold text-purple-800 text-lg">Quick Autofill | एक क्लिक में भरें</h3>
+                  <p className="text-xs text-purple-600">Fill all your details from your saved profile | अपनी प्रोफ़ाइल से सभी विवरण भरें</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleAutofillFromProfile}
+                disabled={isLoadingProfile}
+                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {isLoadingProfile ? (
+                  <>
+                    <span className="animate-spin">⏳</span>
+                    Loading...
+                  </>
+                ) : (
+                  <>
+                    <span>✨</span>
+                    Autofill | भरें
+                  </>
+                )}
+              </button>
+            </div>
+            {farmerProfile && (
+              <div className="mt-3 pt-3 border-t border-purple-200 flex items-center gap-2 text-sm text-purple-700">
+                <span className="text-green-500">✓</span>
+                <span>Profile loaded: <strong>{farmerProfile.full_name}</strong> • {farmerProfile.village}, {farmerProfile.district}</span>
+              </div>
+            )}
+          </div>
+
           {/* Machine Recommendation */}
           {selectedCrop && (
             <div className="bg-green-50 border-2 border-green-300 rounded-xl p-4 animate-fadeIn">
@@ -1330,6 +1627,8 @@ function BookMachineContent() {
           <div>
             <label className="block text-sm font-medium mb-2">
               Phone Number | फोन नंबर <span className="text-red-500">*</span>
+              {isLoadingProfile && <span className="ml-2 text-gray-500 text-xs">Looking up...</span>}
+              {farmerProfile && <span className="ml-2 text-green-600 text-xs">✓ Profile found!</span>}
             </label>
             <input
               type="tel"
@@ -1338,8 +1637,21 @@ function BookMachineContent() {
               required
               placeholder="10-digit mobile number"
               pattern="[0-9]{10}"
-              className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+                farmerProfile ? 'border-green-500 bg-green-50' : ''
+              }`}
             />
+            {farmerProfile && (
+              <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg text-sm">
+                <div className="font-medium text-green-800">✓ Registered Farmer | पंजीकृत किसान</div>
+                <div className="text-green-700 mt-1">
+                  {farmerProfile.full_name} • {farmerProfile.village}, {farmerProfile.district}
+                  {farmerProfile.fields && farmerProfile.fields.length > 0 && (
+                    <span> • {farmerProfile.fields.reduce((sum, f) => sum + f.area_acres, 0)} acres</span>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Acres */}

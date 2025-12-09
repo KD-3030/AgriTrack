@@ -46,3 +46,8 @@ coverage/
 # Misc
 *.tgz
 .cache/
+
+# WhatsApp Web session (wwebjs)
+apps/api/.wwebjs_auth/
+.wwebjs_auth/
+.wwebjs_cache/

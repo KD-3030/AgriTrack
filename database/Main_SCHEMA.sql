@@ -1,0 +1,308 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.alerts (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  machine_id uuid NOT NULL,
+  type character varying NOT NULL,
+  severity character varying DEFAULT 'warning'::character varying CHECK (severity::text = ANY (ARRAY['info'::character varying, 'warning'::character varying, 'critical'::character varying]::text[])),
+  message text,
+  acknowledged boolean DEFAULT false,
+  acknowledged_by uuid,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT alerts_pkey PRIMARY KEY (id),
+  CONSTRAINT alerts_machine_id_fkey FOREIGN KEY (machine_id) REFERENCES public.machines(id),
+  CONSTRAINT alerts_acknowledged_by_fkey FOREIGN KEY (acknowledged_by) REFERENCES public.users(id)
+);
+CREATE TABLE public.bookings (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  machine_id uuid NOT NULL,
+  farmer_id uuid NOT NULL,
+  scheduled_date date NOT NULL,
+  status character varying DEFAULT 'pending'::character varying CHECK (status::text = ANY (ARRAY['pending'::character varying, 'confirmed'::character varying, 'in_progress'::character varying, 'completed'::character varying, 'cancelled'::character varying]::text[])),
+  notes text,
+  acres_covered numeric,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT bookings_pkey PRIMARY KEY (id),
+  CONSTRAINT bookings_machine_id_fkey FOREIGN KEY (machine_id) REFERENCES public.machines(id),
+  CONSTRAINT bookings_farmer_id_fkey FOREIGN KEY (farmer_id) REFERENCES public.users(id)
+);
+CREATE TABLE public.farmer_fields (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  farmer_id uuid NOT NULL,
+  name character varying NOT NULL,
+  area_acres numeric NOT NULL,
+  village character varying,
+  district character varying,
+  state character varying,
+  latitude numeric,
+  longitude numeric,
+  boundary_coords jsonb,
+  soil_type character varying,
+  irrigation_type character varying,
+  current_crop character varying,
+  last_harvest_date date,
+  next_sowing_date date,
+  is_active boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT farmer_fields_pkey PRIMARY KEY (id),
+  CONSTRAINT farmer_fields_farmer_id_fkey FOREIGN KEY (farmer_id) REFERENCES public.farmer_profiles(id)
+);
+CREATE TABLE public.farmer_notifications (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  farmer_id uuid NOT NULL,
+  type character varying NOT NULL,
+  title character varying NOT NULL,
+  message text NOT NULL,
+  channel character varying NOT NULL CHECK (channel::text = ANY (ARRAY['sms'::character varying, 'push'::character varying, 'email'::character varying, 'whatsapp'::character varying]::text[])),
+  delivery_status character varying DEFAULT 'pending'::character varying CHECK (delivery_status::text = ANY (ARRAY['pending'::character varying, 'sent'::character varying, 'delivered'::character varying, 'failed'::character varying]::text[])),
+  is_read boolean DEFAULT false,
+  read_at timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT farmer_notifications_pkey PRIMARY KEY (id),
+  CONSTRAINT farmer_notifications_farmer_id_fkey FOREIGN KEY (farmer_id) REFERENCES public.farmer_profiles(id)
+);
+CREATE TABLE public.farmer_profiles (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user_id uuid UNIQUE,
+  full_name character varying NOT NULL,
+  phone character varying NOT NULL,
+  alternate_phone character varying,
+  email character varying,
+  profile_image_url text,
+  address_line1 text,
+  address_line2 text,
+  village character varying,
+  district character varying NOT NULL,
+  state character varying NOT NULL,
+  pincode character varying,
+  aadhaar_number character varying,
+  pan_number character varying,
+  farming_experience_years integer DEFAULT 0,
+  primary_crops ARRAY,
+  preferred_language character varying DEFAULT 'hindi'::character varying,
+  notification_language character varying DEFAULT 'hindi'::character varying,
+  is_verified boolean DEFAULT false,
+  verification_date timestamp with time zone,
+  is_active boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT farmer_profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT farmer_profiles_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
+);
+CREATE TABLE public.farmer_service_history (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  farmer_id uuid NOT NULL,
+  booking_id uuid,
+  field_id uuid,
+  machine_id uuid,
+  service_type character varying NOT NULL,
+  service_date date NOT NULL,
+  acres_serviced numeric,
+  hours_worked numeric,
+  rate_per_acre numeric,
+  total_amount numeric,
+  payment_status character varying DEFAULT 'pending'::character varying CHECK (payment_status::text = ANY (ARRAY['pending'::character varying, 'partial'::character varying, 'completed'::character varying, 'refunded'::character varying]::text[])),
+  payment_method character varying,
+  rating integer CHECK (rating >= 1 AND rating <= 5),
+  feedback text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT farmer_service_history_pkey PRIMARY KEY (id),
+  CONSTRAINT farmer_service_history_farmer_id_fkey FOREIGN KEY (farmer_id) REFERENCES public.farmer_profiles(id),
+  CONSTRAINT farmer_service_history_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id),
+  CONSTRAINT farmer_service_history_field_id_fkey FOREIGN KEY (field_id) REFERENCES public.farmer_fields(id),
+  CONSTRAINT farmer_service_history_machine_id_fkey FOREIGN KEY (machine_id) REFERENCES public.machines(id)
+);
+CREATE TABLE public.farmer_transactions (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  farmer_id uuid NOT NULL,
+  booking_id uuid,
+  service_history_id uuid,
+  transaction_type character varying NOT NULL CHECK (transaction_type::text = ANY (ARRAY['payment'::character varying, 'refund'::character varying, 'deposit'::character varying, 'advance'::character varying]::text[])),
+  amount numeric NOT NULL,
+  payment_method character varying,
+  transaction_reference character varying,
+  status character varying DEFAULT 'pending'::character varying CHECK (status::text = ANY (ARRAY['pending'::character varying, 'completed'::character varying, 'failed'::character varying, 'cancelled'::character varying]::text[])),
+  transaction_date timestamp with time zone DEFAULT now(),
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT farmer_transactions_pkey PRIMARY KEY (id),
+  CONSTRAINT farmer_transactions_farmer_id_fkey FOREIGN KEY (farmer_id) REFERENCES public.farmer_profiles(id),
+  CONSTRAINT farmer_transactions_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id),
+  CONSTRAINT farmer_transactions_service_history_id_fkey FOREIGN KEY (service_history_id) REFERENCES public.farmer_service_history(id)
+);
+CREATE TABLE public.fuel_logs (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  machine_id uuid NOT NULL,
+  fuel_level numeric NOT NULL,
+  previous_level numeric,
+  consumption_rate numeric,
+  latitude numeric,
+  longitude numeric,
+  engine_hours numeric,
+  timestamp timestamp with time zone DEFAULT now(),
+  CONSTRAINT fuel_logs_pkey PRIMARY KEY (id),
+  CONSTRAINT fuel_logs_machine_id_fkey FOREIGN KEY (machine_id) REFERENCES public.machines(id)
+);
+CREATE TABLE public.geofence_breaches (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  geofence_id uuid,
+  machine_id uuid,
+  breach_type character varying CHECK (breach_type::text = ANY (ARRAY['entered'::character varying, 'exited'::character varying]::text[])),
+  latitude numeric,
+  longitude numeric,
+  timestamp timestamp with time zone DEFAULT now(),
+  CONSTRAINT geofence_breaches_pkey PRIMARY KEY (id),
+  CONSTRAINT geofence_breaches_geofence_id_fkey FOREIGN KEY (geofence_id) REFERENCES public.geofences(id),
+  CONSTRAINT geofence_breaches_machine_id_fkey FOREIGN KEY (machine_id) REFERENCES public.machines(id)
+);
+CREATE TABLE public.geofence_machines (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  geofence_id uuid,
+  machine_id uuid,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT geofence_machines_pkey PRIMARY KEY (id),
+  CONSTRAINT geofence_machines_geofence_id_fkey FOREIGN KEY (geofence_id) REFERENCES public.geofences(id),
+  CONSTRAINT geofence_machines_machine_id_fkey FOREIGN KEY (machine_id) REFERENCES public.machines(id)
+);
+CREATE TABLE public.geofences (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  name character varying NOT NULL,
+  description text,
+  owner_id uuid,
+  type character varying NOT NULL CHECK (type::text = ANY (ARRAY['circle'::character varying, 'polygon'::character varying]::text[])),
+  center_lat numeric,
+  center_lng numeric,
+  radius_meters numeric,
+  polygon_coords jsonb,
+  active boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT geofences_pkey PRIMARY KEY (id),
+  CONSTRAINT geofences_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.users(id)
+);
+CREATE TABLE public.machines (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  device_id character varying NOT NULL UNIQUE,
+  name character varying NOT NULL,
+  type character varying NOT NULL,
+  model character varying,
+  owner_id uuid,
+  district character varying,
+  state character varying,
+  status character varying DEFAULT 'available'::character varying CHECK (status::text = ANY (ARRAY['available'::character varying, 'in_use'::character varying, 'maintenance'::character varying, 'offline'::character varying]::text[])),
+  last_location jsonb,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT machines_pkey PRIMARY KEY (id),
+  CONSTRAINT machines_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.users(id)
+);
+CREATE TABLE public.maintenance_history (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  machine_id uuid NOT NULL,
+  schedule_id uuid,
+  maintenance_type character varying NOT NULL,
+  completed_date timestamp with time zone NOT NULL,
+  performed_by character varying,
+  cost numeric,
+  notes text,
+  parts_replaced jsonb,
+  mileage_at_service numeric,
+  hours_at_service numeric,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT maintenance_history_pkey PRIMARY KEY (id),
+  CONSTRAINT maintenance_history_machine_id_fkey FOREIGN KEY (machine_id) REFERENCES public.machines(id),
+  CONSTRAINT maintenance_history_schedule_id_fkey FOREIGN KEY (schedule_id) REFERENCES public.maintenance_schedules(id)
+);
+CREATE TABLE public.maintenance_schedules (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  machine_id uuid NOT NULL,
+  maintenance_type character varying NOT NULL,
+  due_date date,
+  due_mileage numeric,
+  due_hours numeric,
+  priority character varying DEFAULT 'medium'::character varying CHECK (priority::text = ANY (ARRAY['low'::character varying, 'medium'::character varying, 'high'::character varying, 'critical'::character varying]::text[])),
+  status character varying DEFAULT 'scheduled'::character varying CHECK (status::text = ANY (ARRAY['scheduled'::character varying, 'in_progress'::character varying, 'completed'::character varying, 'cancelled'::character varying, 'overdue'::character varying]::text[])),
+  notes text,
+  estimated_cost numeric,
+  actual_cost numeric,
+  assigned_to uuid,
+  completed_date timestamp with time zone,
+  recurring_interval_days integer,
+  recurring_interval_mileage numeric,
+  recurring_interval_hours numeric,
+  reminder_sent boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT maintenance_schedules_pkey PRIMARY KEY (id),
+  CONSTRAINT maintenance_schedules_machine_id_fkey FOREIGN KEY (machine_id) REFERENCES public.machines(id),
+  CONSTRAINT maintenance_schedules_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.users(id)
+);
+CREATE TABLE public.notification_preferences (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL,
+  alert_type character varying NOT NULL,
+  sms_enabled boolean DEFAULT true,
+  push_enabled boolean DEFAULT true,
+  email_enabled boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT notification_preferences_pkey PRIMARY KEY (id),
+  CONSTRAINT notification_preferences_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
+);
+CREATE TABLE public.push_tokens (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL,
+  token text NOT NULL,
+  device_type character varying,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT push_tokens_pkey PRIMARY KEY (id),
+  CONSTRAINT push_tokens_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id)
+);
+CREATE TABLE public.refueling_events (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  machine_id uuid NOT NULL,
+  amount_liters numeric NOT NULL,
+  cost numeric,
+  odometer_reading numeric,
+  engine_hours numeric,
+  latitude numeric,
+  longitude numeric,
+  notes text,
+  recorded_by uuid,
+  timestamp timestamp with time zone DEFAULT now(),
+  CONSTRAINT refueling_events_pkey PRIMARY KEY (id),
+  CONSTRAINT refueling_events_machine_id_fkey FOREIGN KEY (machine_id) REFERENCES public.machines(id),
+  CONSTRAINT refueling_events_recorded_by_fkey FOREIGN KEY (recorded_by) REFERENCES public.users(id)
+);
+CREATE TABLE public.sensor_logs (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  machine_id uuid NOT NULL,
+  device_id character varying NOT NULL,
+  temperature numeric,
+  vibration_x numeric,
+  vibration_y numeric,
+  vibration_z numeric,
+  latitude numeric,
+  longitude numeric,
+  speed numeric,
+  state character varying,
+  alerts jsonb,
+  timestamp timestamp with time zone DEFAULT now(),
+  CONSTRAINT sensor_logs_pkey PRIMARY KEY (id),
+  CONSTRAINT sensor_logs_machine_id_fkey FOREIGN KEY (machine_id) REFERENCES public.machines(id)
+);
+CREATE TABLE public.users (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  clerk_id character varying NOT NULL UNIQUE,
+  email character varying,
+  name character varying,
+  phone character varying,
+  role character varying DEFAULT 'farmer'::character varying CHECK (role::text = ANY (ARRAY['farmer'::character varying, 'admin'::character varying, 'operator'::character varying]::text[])),
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT users_pkey PRIMARY KEY (id)
+);

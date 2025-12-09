@@ -24,6 +24,7 @@ class SMSBookingService {
       BOOK: /^BOOK\s+(\d{1,2})[-\/](\d{1,2})(?:[-\/](\d{2,4}))?$/i,
       STATUS: /^STATUS$/i,
       CANCEL: /^CANCEL(?:\s+(\d{4}))?$/i,
+      COMPLETE: /^(COMPLETE|DONE|FINISHED|पूर्ण|ਮੁਕੰਮਲ|সম্পন্ন)(?:\s+(\d{4}))?$/i,
       HELP: /^(HELP|MADAD|मदद|ਮਦਦ|सहायता)$/i,
       CONFIRM: /^(YES|Y|CONFIRM|OK|HA|हां|ਹਾਂ|1)$/i,
       REJECT: /^(NO|N|NAHI|NA|नहीं|ਨਹੀਂ|0)$/i,
@@ -33,8 +34,8 @@ class SMSBookingService {
     // Response templates (multi-language support)
     this.responses = {
       NOT_REGISTERED: 'You are not registered. Please visit your local CHC office or register at AgriTrack.in',
-      INVALID_COMMAND: 'Invalid code. Send:\nBOOK DD-MM - Reserve machine\nSTATUS - Check booking\nCANCEL - Cancel booking\nHELP - Get help',
-      HELP: 'AgriTrack SMS Booking:\n1. BOOK 25-12 - Book for Dec 25\n2. STATUS - Check your booking\n3. CANCEL - Cancel booking\n\nCall 1800-XXX-XXXX for help',
+      INVALID_COMMAND: 'Invalid code. Send:\nBOOK DD-MM - Reserve machine\nSTATUS - Check booking\nCANCEL - Cancel booking\nCOMPLETE - Mark work done\nHELP - Get help',
+      HELP: 'AgriTrack SMS Booking:\n1. BOOK 25-12 - Book for Dec 25\n2. STATUS - Check your booking\n3. CANCEL - Cancel booking\n4. COMPLETE - Mark work finished\n\nCall 1800-XXX-XXXX for help',
       
       // Booking responses
       BOOKING_CONFIRMED: (date, machine, otp) => 
@@ -55,6 +56,12 @@ class SMSBookingService {
       CANCEL_SUCCESS: (date) => `Booking for ${date} has been cancelled.`,
       CANCEL_NONE: 'No active booking to cancel.',
       CANCEL_CONFIRM: (date) => `Cancel booking for ${date}? Reply YES to confirm.`,
+      
+      // Complete responses
+      COMPLETE_SUCCESS: (date, acres) => `✅ Work completed!\n📅 Date: ${date}\n🌾 Acres: ${acres}\n\nThank you for using AgriTrack!`,
+      COMPLETE_NONE: 'No active booking to complete. Book first with BOOK DD-MM.',
+      COMPLETE_CONFIRM: (date) => `Mark work for ${date} as complete? Reply YES to confirm.`,
+      COMPLETE_NEED_OTP: 'Please provide OTP to confirm completion. Send: COMPLETE 1234',
       
       // Confirmation responses
       CONFIRM_SUCCESS: (date, machine, otp) => 
@@ -142,6 +149,9 @@ class SMSBookingService {
             break;
           case 'CANCEL':
             response = await this.handleCancel(phone, parsed.match, farmer, session);
+            break;
+          case 'COMPLETE':
+            response = await this.handleComplete(phone, parsed.match, farmer, session);
             break;
           case 'HELP':
             response = this.responses.HELP;
@@ -297,6 +307,63 @@ class SMSBookingService {
     });
     
     return this.responses.CANCEL_CONFIRM(dateStr);
+  }
+
+  /**
+   * Handle COMPLETE command - mark booking as completed
+   */
+  async handleComplete(phone, match, farmer, session) {
+    if (!farmer) {
+      return this.responses.NOT_REGISTERED;
+    }
+    
+    // Find booking that is confirmed or in_progress
+    const { data: booking, error } = await this.supabase
+      .from('bookings')
+      .select('*, machine:machines(*)')
+      .eq('farmer_id', farmer.id)
+      .in('status', ['confirmed', 'in_progress'])
+      .order('scheduled_date', { ascending: true })
+      .limit(1)
+      .single();
+    
+    if (error || !booking) {
+      return this.responses.COMPLETE_NONE;
+    }
+    
+    const dateStr = this.formatDate(new Date(booking.scheduled_date));
+    
+    // If OTP provided, verify and complete
+    if (match && match[2]) {
+      const otp = match[2];
+      const verified = await this.verifyBookingOTP(booking.id, otp);
+      if (verified) {
+        // Mark as completed
+        await this.supabase
+          .from('bookings')
+          .update({ 
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', booking.id);
+        
+        // Get acres from field if available
+        const { data: field } = await this.supabase
+          .from('farmer_fields')
+          .select('area_acres')
+          .eq('farmer_id', farmer.id)
+          .limit(1)
+          .single();
+        
+        const acres = field?.area_acres || booking.acres_covered || 'N/A';
+        return this.responses.COMPLETE_SUCCESS(dateStr, acres);
+      }
+      return this.responses.OTP_INVALID;
+    }
+    
+    // Ask for OTP to confirm completion
+    return this.responses.COMPLETE_NEED_OTP;
   }
 
   /**
