@@ -35,13 +35,6 @@ interface ISpeechRecognition extends EventTarget {
   onend: ((event: Event) => void) | null;
 }
 
-declare global {
-  interface Window {
-    SpeechRecognition: new () => ISpeechRecognition;
-    webkitSpeechRecognition: new () => ISpeechRecognition;
-  }
-}
-
 interface VoiceInputProps {
   onTranscript: (text: string) => void;
   language?: 'hi-IN' | 'en-US';

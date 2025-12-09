@@ -209,6 +209,7 @@ function BookMachineContent() {
   const [machines, setMachines] = useState<Machine[]>([]);
   const [selectedMachine, setSelectedMachine] = useState('');
   const [farmerName, setFarmerName] = useState('');
+  const [farmerPhone, setFarmerPhone] = useState('');
   const [acres, setAcres] = useState('');
   const [location, setLocation] = useState('');
   const [cropType, setCropType] = useState('');
@@ -227,9 +228,10 @@ function BookMachineContent() {
     crop: boolean;
     machine: boolean;
     name: boolean;
+    phone: boolean;
     acres: boolean;
     location: boolean;
-  }>({ crop: false, machine: false, name: false, acres: false, location: false });
+  }>({ crop: false, machine: false, name: false, phone: false, acres: false, location: false });
   
   // Interview mode state machine
   const [interviewStep, setInterviewStep] = useState(0); // 0=Name, 1=Acres, 2=Location, 3=Crop, 4=Review
@@ -970,13 +972,9 @@ function BookMachineContent() {
     setCropType('');
     setSelectedCrop(null);
     setSelectedMachine('');
-<<<<<<< HEAD
     setFarmerProfile(null);
     setFarmerId('');
     setExtractedFields({ crop: false, machine: false, name: false, phone: false, acres: false, location: false });
-=======
-    setExtractedFields({ crop: false, machine: false, name: false, acres: false, location: false });
->>>>>>> c444f329153cf966438765280034caa3f5355bef
   };
 
   // Handle autofill from profile (voice command or button)
@@ -1371,7 +1369,7 @@ function BookMachineContent() {
     setCropType('');
     setSelectedCrop(null);
     setSelectedMachine('');
-    setExtractedFields({ crop: false, machine: false, name: false, acres: false, location: false });
+    setExtractedFields({ crop: false, machine: false, name: false, phone: false, acres: false, location: false });
     
     // Speak first question with a greeting
     const greeting = {
@@ -1423,7 +1421,7 @@ function BookMachineContent() {
       
       transcriptRef.current = '';
       let hasProcessed = false;
-      let silenceTimeout: NodeJS.Timeout | null = null;
+      let silenceTimeout: number | null = null;
       
       // Reset silence timeout whenever we get speech
       const resetSilenceTimeout = () => {
@@ -1687,11 +1685,8 @@ function BookMachineContent() {
       farmer_name: farmerName,
       acres: parseFloat(acres),
       location: location,
-<<<<<<< HEAD
       crop_type: cropType || undefined,
-=======
       scheduled_date: new Date().toISOString(),
->>>>>>> c444f329153cf966438765280034caa3f5355bef
       timestamp: Date.now(),
       status: 'pending',
       booking_source: 'web'
@@ -2386,8 +2381,11 @@ function BookMachineContent() {
               onChange={(e) => setFarmerName(e.target.value)}
               required
               placeholder="Enter your name"
-<<<<<<< HEAD
-              className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+                voiceMode === 'interview' && interviewActive && interviewStep === 0 
+                  ? 'border-purple-500 bg-white' 
+                  : ''
+              }`}
             />
           </div>
 
@@ -2407,12 +2405,6 @@ function BookMachineContent() {
               pattern="[0-9]{10}"
               className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
                 farmerProfile ? 'border-green-500 bg-green-50' : ''
-=======
-              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
-                voiceMode === 'interview' && interviewActive && interviewStep === 0 
-                  ? 'border-purple-500 bg-white' 
-                  : ''
->>>>>>> c444f329153cf966438765280034caa3f5355bef
               }`}
             />
             {farmerProfile && (

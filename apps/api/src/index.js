@@ -80,6 +80,9 @@ const authRoutes = require('./routes/auth');
 const mandiRoutes = require('./routes/mandi');
 const whatsappRoutes = require('./routes/whatsapp');
 const feedbackRoutes = require('./routes/feedback');
+const twilioWebhookRoutes = require('./routes/twilio-webhook');
+const whatsappWebhookRoutes = require('./routes/whatsapp-webhook');
+const metaWhatsappWebhookRoutes = require('./routes/meta-whatsapp-webhook');
 
 app.use('/api/v1/machines', machineRoutes);
 app.use('/api/v1/bookings', bookingRoutes);
@@ -104,7 +107,6 @@ app.use('/api/webhooks/whatsapp', whatsappWebhookRoutes);
 
 // Meta WhatsApp Cloud API Webhook (official Meta API)
 app.use('/api/webhooks/meta-whatsapp', metaWhatsappWebhookRoutes);
-
 // Also mount auth and mandi at /api for web compatibility
 app.use('/api/auth', authRoutes);
 app.use('/api/mandi', mandiRoutes);

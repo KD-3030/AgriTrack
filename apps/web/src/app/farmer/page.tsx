@@ -281,7 +281,6 @@ export default function FarmerHome() {
             <Sparkles size={20} className="text-emerald-600" />
             <h2 className="text-xl font-semibold text-gray-800">{t.welcome}</h2>
           </div>
-          <p className="text-gray-600 text-sm">Smart India Hackathon 2025</p>
         </div>
 
         {/* Quick Actions */}

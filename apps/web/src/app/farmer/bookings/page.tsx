@@ -35,6 +35,8 @@ export default function MyBookings() {
   const [isOnline, setIsOnline] = useState(true);
   const [loading, setLoading] = useState(true);
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
+  const [farmerPhone, setFarmerPhone] = useState('');
+  const [farmerName, setFarmerName] = useState('');
 
   useEffect(() => {
     // Load farmer info from localStorage
@@ -500,7 +502,7 @@ export default function MyBookings() {
                   machineId={selectedBooking.machine_id}
                   onSuccess={() => {
                     setShowFeedbackForm(false);
-                    loadBookings();
+                    loadBookings(farmerPhone);
                     alert('✅ Feedback submitted successfully!');
                   }}
                   onCancel={() => setShowFeedbackForm(false)}
