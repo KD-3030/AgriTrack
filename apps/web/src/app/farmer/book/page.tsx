@@ -169,6 +169,7 @@ interface ISpeechRecognition extends EventTarget {
   onresult: ((event: SpeechRecognitionEvent) => void) | null;
   onerror: ((event: Event) => void) | null;
   onend: ((event: Event) => void) | null;
+  onstart: ((event: Event) => void) | null;
 }
 
 declare global {
@@ -1399,17 +1400,46 @@ function BookMachineContent() {
     window.speechSynthesis.cancel();
     setTranscript('');
     
-    if (typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)) {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = false; // Single utterance mode
-      recognitionRef.current.interimResults = true;
-      recognitionRef.current.lang = voiceLanguage;
+    // Check browser support
+    if (typeof window === 'undefined') {
+      console.error('Window not available');
+      return;
+    }
+    
+    const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognitionAPI) {
+      alert('Speech recognition is not supported in this browser. Please use Chrome or Edge.');
+      return;
+    }
+    
+    try {
+      const recognition = new SpeechRecognitionAPI();
+      recognitionRef.current = recognition;
+      
+      // Configure for better listening
+      recognition.continuous = true; // Keep listening
+      recognition.interimResults = true;
+      recognition.lang = voiceLanguage;
       
       transcriptRef.current = '';
       let hasProcessed = false;
+      let silenceTimeout: NodeJS.Timeout | null = null;
       
-      recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
+      // Reset silence timeout whenever we get speech
+      const resetSilenceTimeout = () => {
+        if (silenceTimeout) clearTimeout(silenceTimeout);
+        silenceTimeout = setTimeout(() => {
+          // Stop after 3 seconds of silence
+          if (transcriptRef.current && !hasProcessed) {
+            console.log('Silence detected, processing:', transcriptRef.current);
+            hasProcessed = true;
+            recognition.stop();
+            processInterviewResponse(transcriptRef.current, interviewStepRef.current);
+          }
+        }, 3000);
+      };
+      
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
         let finalTranscript = '';
         let interimTranscript = '';
         
@@ -1422,50 +1452,77 @@ function BookMachineContent() {
           }
         }
         
-        transcriptRef.current = finalTranscript.trim() || interimTranscript.trim();
-        setTranscript(finalTranscript || interimTranscript);
+        const currentText = (finalTranscript || interimTranscript).trim();
+        transcriptRef.current = currentText;
+        setTranscript(currentText);
         
-        // Process final result immediately
+        console.log('Speech detected:', currentText, 'Final:', !!finalTranscript.trim());
+        
+        // Reset silence timer
+        resetSilenceTimeout();
+        
+        // Process final result
         if (finalTranscript.trim() && !hasProcessed) {
           hasProcessed = true;
-          console.log('Final transcript:', finalTranscript.trim());
-          // Small delay to let UI update
+          if (silenceTimeout) clearTimeout(silenceTimeout);
+          console.log('Processing final transcript:', finalTranscript.trim());
+          recognition.stop();
           setTimeout(() => {
             processInterviewResponse(finalTranscript.trim(), interviewStepRef.current);
-          }, 300);
+          }, 200);
         }
       };
       
-      recognitionRef.current.onerror = (event: Event) => {
-        console.error('Speech recognition error:', event);
+      recognition.onerror = (event: Event) => {
+        const errorEvent = event as SpeechRecognitionErrorEvent;
+        console.error('Speech recognition error:', errorEvent.error);
         setIsListening(false);
-        // On error, prompt to try again
-        if (!hasProcessed) {
-          speak('कृपया फिर से बोलें। Please try again.', voiceLanguage);
+        if (silenceTimeout) clearTimeout(silenceTimeout);
+        
+        // Handle specific errors
+        if (errorEvent.error === 'no-speech') {
+          speak('आवाज़ नहीं सुनाई दी। फिर से बोलें। No speech detected. Try again.', voiceLanguage);
           setTimeout(() => startInterviewListening(), 2000);
+        } else if (errorEvent.error === 'not-allowed') {
+          alert('Microphone access denied. Please allow microphone permission in your browser settings.');
+        } else if (errorEvent.error === 'audio-capture') {
+          alert('No microphone found. Please connect a microphone.');
         }
       };
       
-      recognitionRef.current.onend = () => {
+      recognition.onend = () => {
+        console.log('Recognition ended, hasProcessed:', hasProcessed);
         setIsListening(false);
-        // If we got interim but no final, use interim
+        if (silenceTimeout) clearTimeout(silenceTimeout);
+        
+        // If we have text but haven't processed, use it
         if (!hasProcessed && transcriptRef.current) {
           hasProcessed = true;
-          console.log('Using interim as final:', transcriptRef.current);
+          console.log('Using accumulated transcript:', transcriptRef.current);
           processInterviewResponse(transcriptRef.current, interviewStepRef.current);
         }
       };
       
-      try {
-        recognitionRef.current.start();
+      recognition.onstart = () => {
+        console.log('Recognition started for step:', interviewStepRef.current);
         setIsListening(true);
-        console.log('Started listening for step:', interviewStepRef.current);
-      } catch (error) {
-        console.error('Failed to start recognition:', error);
-        setIsListening(false);
-      }
+      };
+      
+      recognition.start();
+      console.log('Speech recognition starting...');
+      
+    } catch (error) {
+      console.error('Failed to start recognition:', error);
+      setIsListening(false);
+      alert('Failed to start voice recognition. Please try again.');
     }
   };
+
+  // SpeechRecognitionErrorEvent interface
+  interface SpeechRecognitionErrorEvent extends Event {
+    error: string;
+    message?: string;
+  }
 
   // Stop interview
   const stopInterview = () => {
