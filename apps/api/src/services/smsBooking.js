@@ -25,6 +25,7 @@ class SMSBookingService {
       STATUS: /^STATUS$/i,
       CANCEL: /^CANCEL(?:\s+(\d{4}))?$/i,
       COMPLETE: /^(COMPLETE|DONE|FINISHED|पूर्ण|ਮੁਕੰਮਲ|সম্পন্ন)(?:\s+(\d{4}))?$/i,
+      RECEIPT: /^(RECEIPT|SLIP|BILL|RASEED|रसीद|ਰਸੀਦ|রশিদ|PAYMENT)$/i,
       HELP: /^(HELP|MADAD|मदद|ਮਦਦ|सहायता)$/i,
       CONFIRM: /^(YES|Y|CONFIRM|OK|HA|हां|ਹਾਂ|1)$/i,
       REJECT: /^(NO|N|NAHI|NA|नहीं|ਨਹੀਂ|0)$/i,
@@ -34,8 +35,8 @@ class SMSBookingService {
     // Response templates (multi-language support)
     this.responses = {
       NOT_REGISTERED: 'You are not registered. Please visit your local CHC office or register at AgriTrack.in',
-      INVALID_COMMAND: 'Invalid code. Send:\nBOOK DD-MM - Reserve machine\nSTATUS - Check booking\nCANCEL - Cancel booking\nCOMPLETE - Mark work done\nHELP - Get help',
-      HELP: 'AgriTrack SMS Booking:\n1. BOOK 25-12 - Book for Dec 25\n2. STATUS - Check your booking\n3. CANCEL - Cancel booking\n4. COMPLETE - Mark work finished\n\nCall 1800-XXX-XXXX for help',
+      INVALID_COMMAND: 'Invalid code. Send:\nBOOK DD-MM - Reserve machine\nSTATUS - Check booking\nCANCEL - Cancel booking\nCOMPLETE - Mark work done\nRECEIPT - Get payment slip\nHELP - Get help',
+      HELP: 'AgriTrack SMS Booking:\n1. BOOK 25-12 - Book for Dec 25\n2. STATUS - Check your booking\n3. CANCEL - Cancel booking\n4. COMPLETE - Mark work finished\n5. RECEIPT - Get payment slip\n\nCall 1800-XXX-XXXX for help',
       
       // Booking responses
       BOOKING_CONFIRMED: (date, machine, otp) => 
@@ -58,10 +59,15 @@ class SMSBookingService {
       CANCEL_CONFIRM: (date) => `Cancel booking for ${date}? Reply YES to confirm.`,
       
       // Complete responses
-      COMPLETE_SUCCESS: (date, acres) => `✅ Work completed!\n📅 Date: ${date}\n🌾 Acres: ${acres}\n\nThank you for using AgriTrack!`,
+      COMPLETE_SUCCESS: (date, acres) => `✅ Work completed!\n📅 Date: ${date}\n🌾 Acres: ${acres}\n\nSend RECEIPT for payment slip.`,
       COMPLETE_NONE: 'No active booking to complete. Book first with BOOK DD-MM.',
       COMPLETE_CONFIRM: (date) => `Mark work for ${date} as complete? Reply YES to confirm.`,
       COMPLETE_NEED_OTP: 'Please provide OTP to confirm completion. Send: COMPLETE 1234',
+      
+      // Receipt/Payment slip responses
+      RECEIPT_SUCCESS: (data) => `📄 *PAYMENT SLIP*\n━━━━━━━━━━━━━━━━━\n🆔 Booking: #${data.bookingId}\n🗓 Date: ${data.date}\n🚜 Machine: ${data.machine}\n🌾 Acres: ${data.acres}\n💰 Amount: ₹${data.amount}\n📊 Status: ${data.paymentStatus}\n━━━━━━━━━━━━━━━━━\n${data.paymentStatus === 'Pending' ? 'Pay at CHC office or\nUPI: agritrack@upi' : '✅ Payment received'}`,
+      RECEIPT_NONE: 'No completed bookings found. Complete a booking first to get receipt.',
+      RECEIPT_PENDING: 'Your booking is not yet completed. Send COMPLETE [OTP] first.',
       
       // Confirmation responses
       CONFIRM_SUCCESS: (date, machine, otp) => 
@@ -152,6 +158,9 @@ class SMSBookingService {
             break;
           case 'COMPLETE':
             response = await this.handleComplete(phone, parsed.match, farmer, session);
+            break;
+          case 'RECEIPT':
+            response = await this.handleReceipt(phone, farmer);
             break;
           case 'HELP':
             response = this.responses.HELP;
@@ -364,6 +373,74 @@ class SMSBookingService {
     
     // Ask for OTP to confirm completion
     return this.responses.COMPLETE_NEED_OTP;
+  }
+
+  /**
+   * Handle RECEIPT command - generate payment slip for completed bookings
+   */
+  async handleReceipt(phone, farmer) {
+    if (!farmer) {
+      return this.responses.NOT_REGISTERED;
+    }
+    
+    // Find the most recent completed booking
+    const { data: booking, error } = await this.supabase
+      .from('bookings')
+      .select('*, machine:machines(*)')
+      .eq('farmer_id', farmer.id)
+      .eq('status', 'completed')
+      .order('completed_at', { ascending: false })
+      .limit(1)
+      .single();
+    
+    if (error || !booking) {
+      // Check if there's an active booking that needs completion
+      const { data: activeBooking } = await this.supabase
+        .from('bookings')
+        .select('*')
+        .eq('farmer_id', farmer.id)
+        .in('status', ['confirmed', 'in_progress'])
+        .limit(1)
+        .single();
+      
+      if (activeBooking) {
+        return this.responses.RECEIPT_PENDING;
+      }
+      return this.responses.RECEIPT_NONE;
+    }
+    
+    // Get field data for acres
+    const { data: field } = await this.supabase
+      .from('farmer_fields')
+      .select('area_acres')
+      .eq('farmer_id', farmer.id)
+      .limit(1)
+      .single();
+    
+    const acres = field?.area_acres || booking.acres_covered || 5;
+    const ratePerAcre = booking.machine?.rate_per_acre || 500;
+    const amount = acres * ratePerAcre;
+    
+    // Check payment status from farmer_services if exists
+    const { data: service } = await this.supabase
+      .from('farmer_services')
+      .select('payment_status')
+      .eq('booking_id', booking.id)
+      .limit(1)
+      .single();
+    
+    const paymentStatus = service?.payment_status === 'paid' ? 'Paid' : 'Pending';
+    
+    const receiptData = {
+      bookingId: booking.id.substring(0, 8).toUpperCase(),
+      date: this.formatDate(new Date(booking.scheduled_date)),
+      machine: booking.machine?.name || 'Happy Seeder',
+      acres: acres,
+      amount: amount.toLocaleString('en-IN'),
+      paymentStatus: paymentStatus
+    };
+    
+    return this.responses.RECEIPT_SUCCESS(receiptData);
   }
 
   /**
