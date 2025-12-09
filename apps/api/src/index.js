@@ -43,6 +43,9 @@ app.get('/', (req, res) => {
   res.redirect('/docs');
 });
 
+// Import SMS Booking Service
+const smsBookingService = require('./services/smsBooking');
+
 // Initialize services with Supabase client after connection
 const initializeServices = () => {
   const supabase = db.getClient();
@@ -52,7 +55,9 @@ const initializeServices = () => {
     fuelService.setSupabase(supabase);
     maintenanceService.setSupabase(supabase);
     alertManager.setSupabase(supabase);
+    smsBookingService.setSupabase(supabase);
     console.log('✅ Phase 2 services initialized');
+    console.log('✅ SMS Booking Service initialized');
   }
 };
 
@@ -72,6 +77,9 @@ const farmerRoutes = require('./routes/farmers');
 const schedulingRoutes = require('./routes/scheduling');
 const authRoutes = require('./routes/auth');
 const mandiRoutes = require('./routes/mandi');
+const twilioWebhookRoutes = require('./routes/twilio-webhook');
+const whatsappWebhookRoutes = require('./routes/whatsapp-webhook');
+const metaWhatsappWebhookRoutes = require('./routes/meta-whatsapp-webhook');
 
 app.use('/api/v1/machines', machineRoutes);
 app.use('/api/v1/bookings', bookingRoutes);
@@ -85,6 +93,15 @@ app.use('/api/v1/farmers', farmerRoutes);
 app.use('/api/v1/scheduling', schedulingRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/mandi', mandiRoutes);
+
+// Twilio SMS Webhook (public endpoint for Twilio)
+app.use('/api/webhooks/twilio-sms', twilioWebhookRoutes);
+
+// Twilio WhatsApp Webhook (public endpoint for Twilio WhatsApp)
+app.use('/api/webhooks/whatsapp', whatsappWebhookRoutes);
+
+// Meta WhatsApp Cloud API Webhook (official Meta API)
+app.use('/api/webhooks/meta-whatsapp', metaWhatsappWebhookRoutes);
 
 // Also mount auth and mandi at /api for web compatibility
 app.use('/api/auth', authRoutes);
