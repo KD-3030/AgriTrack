@@ -13,6 +13,7 @@ const alertManager = require('./services/alertManager');
 const geofenceService = require('./services/geofence');
 const fuelService = require('./services/fuel');
 const maintenanceService = require('./services/maintenance');
+const whatsappService = require('./services/whatsappService');
 
 const app = express();
 const server = http.createServer(app);
@@ -72,6 +73,8 @@ const farmerRoutes = require('./routes/farmers');
 const schedulingRoutes = require('./routes/scheduling');
 const authRoutes = require('./routes/auth');
 const mandiRoutes = require('./routes/mandi');
+const whatsappRoutes = require('./routes/whatsapp');
+const feedbackRoutes = require('./routes/feedback');
 
 app.use('/api/v1/machines', machineRoutes);
 app.use('/api/v1/bookings', bookingRoutes);
@@ -85,10 +88,14 @@ app.use('/api/v1/farmers', farmerRoutes);
 app.use('/api/v1/scheduling', schedulingRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/mandi', mandiRoutes);
+app.use('/api/v1/whatsapp', whatsappRoutes);
+app.use('/api/v1/feedback', feedbackRoutes);
 
 // Also mount auth and mandi at /api for web compatibility
 app.use('/api/auth', authRoutes);
 app.use('/api/mandi', mandiRoutes);
+app.use('/api/whatsapp', whatsappRoutes);
+app.use('/api/feedback', feedbackRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -265,6 +272,14 @@ app.set('machineStates', machineStates);
 app.set('mqttClient', mqttClient);
 
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   console.log(`🚀 AgriTrack API running on port ${PORT}`);
+  
+  // Initialize WhatsApp Web.js (FREE!)
+  try {
+    await whatsappService.initializeWhatsAppWeb();
+  } catch (error) {
+    console.error('⚠️ WhatsApp Web initialization failed:', error.message);
+    console.log('   You can scan QR code later to connect WhatsApp');
+  }
 });

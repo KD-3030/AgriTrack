@@ -129,7 +129,7 @@ npm run dev
 
 ### Run Web Dashboard
 ```bash
-cd apps/web
+cd apps/api
 npm install
 npm run dev
 ```
@@ -223,6 +223,15 @@ uvicorn server:app --reload --port 8001
 | POST | `/api/v1/maintenance` | Create schedule |
 | POST | `/api/v1/maintenance/:id/complete` | Complete maintenance |
 
+### Phase 6: Farmer Feedback API (Port 3001)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/feedback` | Submit feedback (approve/reject work) |
+| GET | `/api/v1/feedback/booking/:bookingId` | Get feedback for booking |
+| GET | `/api/v1/feedback/operator/:operatorId` | Get all operator feedback |
+| GET | `/api/v1/feedback/operator/:operatorId/summary` | Get operator rating summary |
+
 ### Crop Residue API (Port 8001)
 
 | Method | Endpoint | Description |
@@ -278,6 +287,32 @@ uvicorn server:app --reload --port 8001
 - Automatic reminders (7, 3, 1 day before due)
 - Recurring maintenance support
 - Complete maintenance history
+
+### 📱 WhatsApp Booking System (Green API)
+- Instant machine booking via WhatsApp messages
+- No Meta API approval needed (uses Green API gateway)
+- Natural language booking: "Book Tractor on 15-12-2025 for 5 acres at Village Road"
+- Auto farmer registration on first message
+- Commands: HELP, LIST, MY BOOKINGS, BOOK
+- Automatic booking confirmations
+- Real-time booking status updates
+- Setup time: ~30 minutes
+- **[📖 Setup Guide](./WHATSAPP_SETUP.md)** | **[🔄 Flow Diagram](./WHATSAPP_FLOW.md)**
+
+### ⭐ Farmer Feedback System (Phase 6)
+- **Approval-based work completion**: Farmer says "Okay" to complete or rejects for redo
+- 5-star rating system with detailed categories
+  - Service Quality, Timeliness, Machine Condition, Operator Behavior
+- Written reviews and recommendations
+- Work rejection with reasons for improvement
+- Operator rating summary and statistics
+- **Workflow**:
+  1. Operator completes work
+  2. Farmer reviews and approves/rejects
+  3. If approved → Booking marked completed, operator gets rating
+  4. If rejected → Booking stays pending, operator notified to redo
+- Prevents disputes and ensures quality service
+- Builds operator reputation scores
 - Fleet-wide maintenance dashboard
 - Overdue maintenance alerts
 
@@ -329,6 +364,6 @@ PUBLISH_INTERVAL=2.0
 
 ---
 
-Made with ❤️ for Smart India Hackathon 2025
-
-
+Made with ❤️ for Smart India Hackathon 2025#   A g r i T r a c k 
+ 
+ 

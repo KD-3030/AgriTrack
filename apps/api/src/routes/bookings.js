@@ -3,7 +3,30 @@ const router = express.Router();
 const db = require('../services/database');
 
 // Mock bookings for testing without database
-const mockBookings = [];
+const mockBookings = [
+  {
+    id: 'BK001',
+    farmer_id: 'FARMER123',
+    farmer_name: 'Test Farmer',
+    machine_id: 'TR001',
+    location: 'Test Village, Punjab',
+    acres: 10,
+    status: 'in_progress',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: 'BK002',
+    farmer_id: 'FARMER123',
+    farmer_name: 'Test Farmer',
+    machine_id: 'TR002',
+    location: 'Demo Farm, Haryana',
+    acres: 15,
+    status: 'pending',
+    created_at: new Date(Date.now() - 86400000).toISOString(),
+    updated_at: new Date(Date.now() - 86400000).toISOString()
+  }
+];
 
 // GET /api/v1/bookings - List all bookings
 router.get('/', async (req, res) => {
@@ -201,3 +224,4 @@ router.get('/:id', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.mockBookings = mockBookings;
