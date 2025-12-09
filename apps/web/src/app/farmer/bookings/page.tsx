@@ -2,17 +2,21 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Activity, Clock, CheckCircle, AlertCircle, Zap } from 'lucide-react';
+import { ArrowLeft, Activity, Clock, CheckCircle, AlertCircle, Zap, Calendar, MapPin, Tractor, User } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import FeedbackForm from '@/components/FeedbackForm';
 
 interface Booking {
   id: string;
   machine_id: string;
+  machine_name?: string;
+  machine_type?: string;
   farmer_name: string;
+  farmer_phone?: string;
   location: string;
   acres: number;
   status: string;
+  scheduled_date?: string;
   created_at: string;
   offline?: boolean;
 }
@@ -33,7 +37,13 @@ export default function MyBookings() {
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
 
   useEffect(() => {
-    loadBookings();
+    // Load farmer info from localStorage
+    const savedPhone = localStorage.getItem('farmer_phone') || '';
+    const savedName = localStorage.getItem('farmer_name') || '';
+    setFarmerPhone(savedPhone);
+    setFarmerName(savedName);
+    
+    loadBookings(savedPhone);
     setupOnlineSync();
 
     // Check online status
@@ -74,7 +84,18 @@ export default function MyBookings() {
         });
 
         if (response.ok) {
+          const data = await response.json();
           console.log(`✅ Synced booking: ${booking.id}`);
+          
+          // Update my_bookings with the server response
+          if (data.success && data.booking) {
+            const myBookings = JSON.parse(localStorage.getItem('my_bookings') || '[]');
+            const index = myBookings.findIndex((b: Booking) => b.id === booking.id);
+            if (index !== -1) {
+              myBookings[index] = { ...myBookings[index], ...data.booking, offline: false };
+              localStorage.setItem('my_bookings', JSON.stringify(myBookings));
+            }
+          }
         }
       } catch (error) {
         console.error(`❌ Failed to sync booking: ${booking.id}`, error);
@@ -83,7 +104,7 @@ export default function MyBookings() {
 
     // Clear offline bookings after sync
     localStorage.setItem('offline_bookings', '[]');
-    loadBookings();
+    loadBookings(farmerPhone);
   };
 
   const setupOnlineSync = () => {
@@ -97,18 +118,55 @@ export default function MyBookings() {
     return () => clearInterval(interval);
   };
 
-  const loadBookings = async () => {
+  const loadBookings = async (phone: string) => {
     setLoading(true);
     try {
-      // Load online bookings
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/v1/bookings`);
-      const data = await response.json();
+      // First, load bookings from localStorage (my_bookings)
+      const myBookings: Booking[] = JSON.parse(localStorage.getItem('my_bookings') || '[]');
       
-      // Load offline bookings
-      const offlineBookings = JSON.parse(localStorage.getItem('offline_bookings') || '[]');
+      // Also load offline bookings that haven't synced yet
+      const offlineBookings: Booking[] = JSON.parse(localStorage.getItem('offline_bookings') || '[]');
       
-      // Combine and sort by date
-      const allBookings = [...data, ...offlineBookings].sort((a, b) => 
+      // Try to fetch from API if we have a phone number
+      let apiBookings: Booking[] = [];
+      if (phone && isOnline) {
+        try {
+          const response = await fetch(
+            `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/v1/bookings?farmer_phone=${encodeURIComponent(phone)}`
+          );
+          const data = await response.json();
+          apiBookings = Array.isArray(data) ? data : [];
+        } catch (err) {
+          console.log('Could not fetch from API, using local data');
+        }
+      }
+      
+      // Merge all bookings, removing duplicates by ID
+      const allBookingsMap = new Map<string, Booking>();
+      
+      // Add API bookings first
+      apiBookings.forEach(b => {
+        if (b.farmer_phone === phone || !phone) {
+          allBookingsMap.set(b.id, b);
+        }
+      });
+      
+      // Add local bookings (these take precedence for offline ones)
+      myBookings.forEach(b => {
+        if (!allBookingsMap.has(b.id) || b.offline) {
+          allBookingsMap.set(b.id, b);
+        }
+      });
+      
+      // Add any offline bookings not yet synced
+      offlineBookings.forEach(b => {
+        if (!allBookingsMap.has(b.id)) {
+          allBookingsMap.set(b.id, b);
+        }
+      });
+      
+      // Convert to array and sort by date (newest first)
+      const allBookings = Array.from(allBookingsMap.values()).sort((a, b) => 
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
 
@@ -117,8 +175,9 @@ export default function MyBookings() {
       console.error('Failed to load bookings:', error);
       
       // If offline, load only local bookings
+      const myBookings = JSON.parse(localStorage.getItem('my_bookings') || '[]');
       const offlineBookings = JSON.parse(localStorage.getItem('offline_bookings') || '[]');
-      setBookings(offlineBookings);
+      setBookings([...myBookings, ...offlineBookings]);
     } finally {
       setLoading(false);
     }
@@ -202,7 +261,14 @@ export default function MyBookings() {
           <button onClick={() => router.back()} className="hover:bg-blue-700 p-2 rounded">
             <ArrowLeft size={24} />
           </button>
-          <h1 className="text-xl font-bold">My Bookings | मेरी बुकिंग</h1>
+          <div>
+            <h1 className="text-xl font-bold">My Bookings | मेरी बुकिंग</h1>
+            {farmerName && (
+              <p className="text-blue-200 text-sm flex items-center gap-1">
+                <User size={14} /> {farmerName}
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
@@ -224,6 +290,7 @@ export default function MyBookings() {
           <div className="bg-white rounded-xl shadow-md p-12 text-center">
             <Activity className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h2 className="text-xl font-semibold text-gray-700 mb-2">No Bookings Yet</h2>
+            <p className="text-gray-500 mb-2">अभी तक कोई बुकिंग नहीं</p>
             <p className="text-gray-600 mb-6">You haven't made any bookings yet</p>
             <button
               onClick={() => router.push('/farmer/book')}
@@ -234,35 +301,90 @@ export default function MyBookings() {
           </div>
         ) : (
           <div className="space-y-6">
+            {/* Summary Card */}
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl p-4 shadow-lg">
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="text-blue-100 text-sm">Total Bookings | कुल बुकिंग</p>
+                  <p className="text-3xl font-bold">{bookings.length}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-blue-100 text-sm">Pending | लंबित</p>
+                  <p className="text-2xl font-bold">{bookings.filter(b => b.status === 'pending').length}</p>
+                </div>
+              </div>
+            </div>
+
             {/* Bookings List */}
             <div className="bg-white rounded-xl shadow-md p-6">
-              <h2 className="text-lg font-semibold mb-4">Recent Bookings</h2>
-              <div className="space-y-3">
+              <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <Calendar className="text-blue-600" />
+                Your Bookings | आपकी बुकिंग
+              </h2>
+              <div className="space-y-4">
                 {bookings.map((booking) => (
                   <div
                     key={booking.id}
-                    className="border rounded-lg p-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                    className={`border-2 rounded-xl p-4 hover:shadow-md transition-all cursor-pointer ${
+                      selectedBooking?.id === booking.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300'
+                    }`}
                     onClick={() => setSelectedBooking(booking)}
                   >
-                    <div className="flex justify-between items-start mb-2">
+                    {/* Status Banner */}
+                    <div className="flex justify-between items-start mb-3">
                       <div className="flex items-center gap-2">
                         {getStatusIcon(booking.status)}
-                        <h3 className="font-semibold">{booking.id}</h3>
+                        <span className="font-mono text-sm text-gray-600">{booking.id}</span>
                         {booking.offline && (
-                          <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded">
-                            Offline
+                          <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
+                            📵 Offline
                           </span>
                         )}
                       </div>
-                      <span className={`text-xs px-3 py-1 rounded-full border ${getStatusColor(booking.status)}`}>
+                      <span className={`text-xs px-3 py-1 rounded-full border font-semibold ${getStatusColor(booking.status)}`}>
                         {booking.status.toUpperCase()}
                       </span>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 text-sm text-gray-600">
-                      <p>📍 {booking.location}</p>
-                      <p>🚜 {booking.machine_id}</p>
-                      <p>🌾 {booking.acres} acres</p>
-                      <p>📅 {new Date(booking.created_at).toLocaleDateString()}</p>
+
+                    {/* Machine Details */}
+                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-3 mb-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Tractor className="text-green-600" size={20} />
+                        <span className="font-semibold text-green-800">
+                          {booking.machine_name || booking.machine_type || 'Machine'}
+                        </span>
+                      </div>
+                      <p className="text-sm text-green-600">ID: {booking.machine_id}</p>
+                    </div>
+
+                    {/* Booking Date */}
+                    <div className="bg-gradient-to-r from-amber-50 to-yellow-50 rounded-lg p-3 mb-3">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="text-amber-600" size={18} />
+                        <div>
+                          <p className="text-xs text-amber-600">Booking Date | बुकिंग की तारीख</p>
+                          <p className="font-semibold text-amber-800">
+                            {new Date(booking.scheduled_date || booking.created_at).toLocaleDateString('en-IN', {
+                              weekday: 'short',
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Other Details */}
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div className="flex items-center gap-2 text-gray-600">
+                        <MapPin size={16} className="text-purple-500" />
+                        <span>{booking.location}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-gray-600">
+                        <span>🌾</span>
+                        <span>{booking.acres} acres</span>
+                      </div>
                     </div>
                   </div>
                 ))}

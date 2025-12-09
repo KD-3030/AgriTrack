@@ -184,7 +184,6 @@ function BookMachineContent() {
   const [machines, setMachines] = useState<Machine[]>([]);
   const [selectedMachine, setSelectedMachine] = useState('');
   const [farmerName, setFarmerName] = useState('');
-  const [farmerPhone, setFarmerPhone] = useState('');
   const [acres, setAcres] = useState('');
   const [location, setLocation] = useState('');
   const [cropType, setCropType] = useState('');
@@ -197,16 +196,65 @@ function BookMachineContent() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [showCropGuide, setShowCropGuide] = useState(false);
   const [cropSearchTerm, setCropSearchTerm] = useState('');
-  const [voiceMode, setVoiceMode] = useState<'full' | 'field'>('full'); // full = fill all fields, field = one field
+  const [voiceMode, setVoiceMode] = useState<'full' | 'field' | 'interview'>('interview'); // full = fill all fields, field = one field, interview = step-by-step
   const [currentVoiceField, setCurrentVoiceField] = useState<string | null>(null);
   const [extractedFields, setExtractedFields] = useState<{
     crop: boolean;
     machine: boolean;
     name: boolean;
-    phone: boolean;
     acres: boolean;
     location: boolean;
-  }>({ crop: false, machine: false, name: false, phone: false, acres: false, location: false });
+  }>({ crop: false, machine: false, name: false, acres: false, location: false });
+  
+  // Interview mode state machine
+  const [interviewStep, setInterviewStep] = useState(0); // 0=Name, 1=Acres, 2=Location, 3=Crop, 4=Review
+  const [interviewActive, setInterviewActive] = useState(false);
+  const interviewStepRef = useRef(0);
+  
+  // Interview questions in multiple languages
+  const INTERVIEW_QUESTIONS = {
+    0: { // Name
+      'hi-IN': 'नमस्ते! कृपया अपना नाम बताइए।',
+      'pa-IN': 'ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ! ਕਿਰਪਾ ਕਰਕੇ ਆਪਣਾ ਨਾਮ ਦੱਸੋ।',
+      'en-IN': 'Hello! Please tell me your name.',
+      'bn-IN': 'নমস্কার! আপনার নাম বলুন।',
+      field: 'name',
+      label: 'Name / नाम',
+    },
+    1: { // Acres
+      'hi-IN': 'आपके पास कितने एकड़ जमीन है?',
+      'pa-IN': 'ਤੁਹਾਡੇ ਕੋਲ ਕਿੰਨੇ ਏਕੜ ਜ਼ਮੀਨ ਹੈ?',
+      'en-IN': 'How many acres of land do you have?',
+      'bn-IN': 'আপনার কত একর জমি আছে?',
+      field: 'acres',
+      label: 'Land Area / एकड़',
+    },
+    2: { // Location
+      'hi-IN': 'आपका गांव या शहर कौन सा है?',
+      'pa-IN': 'ਤੁਹਾਡਾ ਪਿੰਡ ਜਾਂ ਸ਼ਹਿਰ ਕਿਹੜਾ ਹੈ?',
+      'en-IN': 'What is your village or city name?',
+      'bn-IN': 'আপনার গ্রাম বা শহর কোনটি?',
+      field: 'location',
+      label: 'Village / गांव',
+    },
+    3: { // Crop
+      'hi-IN': 'आप कौन सी फसल उगाना चाहते हैं? जैसे धान, गेहूं, गन्ना।',
+      'pa-IN': 'ਤੁਸੀਂ ਕਿਹੜੀ ਫਸਲ ਉਗਾਉਣਾ ਚਾਹੁੰਦੇ ਹੋ? ਜਿਵੇਂ ਝੋਨਾ, ਕਣਕ।',
+      'en-IN': 'Which crop do you want to grow? For example: rice, wheat, sugarcane.',
+      'bn-IN': 'আপনি কোন ফসল চাষ করতে চান? যেমন ধান, গম।',
+      field: 'crop',
+      label: 'Crop / फसल',
+    },
+    4: { // Review
+      'hi-IN': 'धन्यवाद! आपकी जानकारी पूरी हो गई। कृपया जांच करें और बुकिंग करें।',
+      'pa-IN': 'ਧੰਨਵਾਦ! ਤੁਹਾਡੀ ਜਾਣਕਾਰੀ ਪੂਰੀ ਹੋ ਗਈ। ਕਿਰਪਾ ਕਰਕੇ ਜਾਂਚ ਕਰੋ।',
+      'en-IN': 'Thank you! Your information is complete. Please review and confirm your booking.',
+      'bn-IN': 'ধন্যবাদ! আপনার তথ্য সম্পূর্ণ হয়েছে। দয়া করে পরীক্ষা করুন।',
+      field: 'review',
+      label: 'Review / समीक्षा',
+    },
+  } as const;
+  
   const recognitionRef = useRef<ISpeechRecognition | null>(null);
   const transcriptRef = useRef<string>('');
 
@@ -228,14 +276,31 @@ function BookMachineContent() {
     if (typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)) {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = false;
-      recognitionRef.current.interimResults = false;
-      recognitionRef.current.lang = 'hi-IN'; // Hindi
+      recognitionRef.current.continuous = true;
+      recognitionRef.current.interimResults = true;
+      recognitionRef.current.lang = voiceLanguage;
 
       recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
-        const speechResult = event.results[0][0].transcript.toLowerCase();
-        setTranscript(speechResult);
-        handleVoiceCommand(speechResult);
+        let interimTranscript = '';
+        let finalTranscript = '';
+        
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript;
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+        
+        // Show real-time transcript
+        const currentTranscript = finalTranscript || interimTranscript;
+        setTranscript(currentTranscript);
+        
+        // Process in real-time as user speaks
+        if (currentTranscript) {
+          processRealTimeVoice(currentTranscript);
+        }
       };
 
       recognitionRef.current.onerror = (event: Event) => {
@@ -253,6 +318,96 @@ function BookMachineContent() {
       window.removeEventListener('offline', () => setIsOnline(false));
     };
   }, [searchParams]);
+
+  // Real-time voice processing - updates fields as user speaks
+  const processRealTimeVoice = (text: string) => {
+    const lowerText = text.toLowerCase();
+    
+    // Detect language
+    const detectedLang = detectLanguage(text);
+    if (detectedLang !== voiceLanguage) {
+      setVoiceLanguage(detectedLang);
+      if (recognitionRef.current) {
+        recognitionRef.current.lang = detectedLang;
+      }
+    }
+    
+    // Real-time extraction - update fields as patterns are detected
+    
+    // 1. Name extraction - "my name is X" or "I am X" or "मेरा नाम X"
+    const namePatterns = [
+      /(?:my name is|i am|i'm)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i,
+      /(?:मेरा नाम|नाम)\s+([^\s]+(?:\s+[^\s]+)?)/i,
+      /(?:ਮੇਰਾ ਨਾਮ)\s+([^\s]+(?:\s+[^\s]+)?)/i,
+      /আমার\s+নাম\s+([\u0980-\u09FF]+(?:\s+[\u0980-\u09FF]+)?)/i,
+    ];
+    
+    for (const pattern of namePatterns) {
+      const match = text.match(pattern);
+      if (match && match[1]) {
+        let name = match[1].trim();
+        // Clean up - remove words that aren't part of name
+        name = name.replace(/\s+(i|in|from|and|my|phone|village|acre|have|live|stay)\b.*/i, '').trim();
+        if (name.length > 1 && !isCommonWord(name) && !/^\d+$/.test(name)) {
+          setFarmerName(capitalizeWords(name));
+          setExtractedFields(prev => ({ ...prev, name: true }));
+        }
+      }
+    }
+    
+    // 3. Acres - number followed by acre/acres/land keywords
+    const acresPatterns = [
+      /(\d+(?:\.\d+)?)\s*(?:acre|acres|एकड़|একর)/i,
+      /(?:have|got)\s+(\d+(?:\.\d+)?)\s*(?:acre|acres)/i,
+    ];
+    for (const pattern of acresPatterns) {
+      const match = lowerText.match(pattern);
+      if (match && match[1]) {
+        const num = parseFloat(match[1]);
+        if (!isNaN(num) && num > 0 && num < 10000) {
+          setAcres(num.toString());
+          setExtractedFields(prev => ({ ...prev, acres: true }));
+          break;
+        }
+      }
+    }
+    
+    // 4. Location - "in [City]" or "from [Place]" or village keywords
+    const locationPatterns = [
+      /(?:i\s+)?(?:am\s+)?(?:live\s+)?(?:stay\s+)?in\s+([a-zA-Z]+)/i,
+      /(?:from|village|गांव|गाँव|ਪਿੰਡ|গ্রাম)\s+([a-zA-Z\u0900-\u097F\u0A00-\u0A7F\u0980-\u09FF]+)/i,
+    ];
+    for (const pattern of locationPatterns) {
+      const match = text.match(pattern);
+      if (match && match[1]) {
+        const loc = match[1].trim();
+        // Don't capture common words as location
+        if (loc.length > 1 && !isCommonWord(loc) && !/^\d+$/.test(loc) && 
+            !['the', 'a', 'an', 'and', 'or'].includes(loc.toLowerCase())) {
+          setLocation(capitalizeWords(loc));
+          setExtractedFields(prev => ({ ...prev, location: true }));
+          break;
+        }
+      }
+    }
+    
+    // 5. Crop detection - rice, wheat, etc.
+    const cropKeywords = ['rice', 'wheat', 'maize', 'corn', 'sugarcane', 'cotton', 'soybean', 'mustard', 
+                          'potato', 'onion', 'tomato', 'bajra', 'jowar', 'pulses', 'paddy',
+                          'धान', 'गेहूं', 'चावल', 'ধান', 'গম', 'ਕਣਕ', 'ਝੋਨਾ'];
+    for (const crop of cropKeywords) {
+      if (lowerText.includes(crop.toLowerCase()) || text.includes(crop)) {
+        const foundCrop = CROP_LOOKUP[crop.toLowerCase()] || CROP_LOOKUP[crop];
+        if (foundCrop) {
+          setCropType(foundCrop.id);
+          setSelectedCrop(foundCrop);
+          setExtractedFields(prev => ({ ...prev, crop: true }));
+          autoSelectMachineForCrop(foundCrop);
+          break;
+        }
+      }
+    }
+  };
 
   const fetchMachines = async () => {
     try {
@@ -326,14 +481,7 @@ function BookMachineContent() {
       filledFields.push('नाम/Name');
     }
     
-    // 4. Extract Phone
-    if (extracted.phone) {
-      setFarmerPhone(extracted.phone);
-      newExtractedFields.phone = true;
-      filledFields.push('फोन/Phone');
-    }
-    
-    // 5. Extract Acres
+    // 4. Extract Acres
     if (extracted.acres) {
       setAcres(extracted.acres.toString());
       newExtractedFields.acres = true;
@@ -356,7 +504,7 @@ function BookMachineContent() {
     } else {
       // Handle specific commands
       if (lowerCommand.includes('book') || lowerCommand.includes('बुक') || lowerCommand.includes('ਬੁੱਕ') || lowerCommand.includes('বুক')) {
-        if (selectedMachine && farmerName && farmerPhone && acres && location) {
+        if (selectedMachine && farmerName && acres && location) {
           speak(getLocalizedText('booking', detectedLang), detectedLang);
           handleSubmit(new Event('submit') as any);
         } else {
@@ -428,12 +576,36 @@ function BookMachineContent() {
 
   // Extract name from text
   const extractName = (text: string): string | null => {
-    // Pattern: "my name is X", "मेरा नाम X है", "আমার নাম X", etc.
+    // Only extract name when there's a clear complete pattern
+    // Avoid extracting partial speech like "I am" without a complete name
+    
+    const lowerText = text.toLowerCase();
+    
+    // List of words that should NOT be treated as names
+    const nonNameWords = [
+      'in', 'from', 'at', 'the', 'a', 'an', 'and', 'or', 'but', 'for', 'to', 
+      'of', 'on', 'with', 'by', 'about', 'into', 'through', 'during', 'before',
+      'after', 'above', 'below', 'between', 'under', 'again', 'further', 'then',
+      'here', 'there', 'when', 'where', 'why', 'how', 'all', 'each', 'every',
+      'both', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'not',
+      'only', 'same', 'so', 'than', 'too', 'very', 'just', 'also', 'now',
+      'going', 'living', 'staying', 'having', 'doing', 'calling', 'speaking',
+      'farmer', 'farming', 'firm', 'farm', 'rice', 'wheat', 'crop', 'land',
+      'acres', 'acre', 'village', 'city', 'town', 'district', 'phone', 'mobile',
+      'number', 'book', 'booking', 'machine', 'tractor', 'kolkata', 'delhi',
+      'punjab', 'haryana', 'mumbai', 'chennai', 'bangalore', 'hyderabad'
+    ];
+    
+    // Pattern: "my name is X Y" - requires at least one proper name word
+    // Only match if followed by a clear boundary (punctuation, location keyword, or end)
     const patterns = [
-      /(?:my name is|i am|i'm|name is)\s+([a-zA-Z\s]+?)(?:\s+(?:and|from|phone|village|acre|mobile|number|i live|,|\.)|$)/i,
+      // English: "my name is Firstname Lastname" - strict pattern requiring clear end
+      /my\s+name\s+is\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s*(?:[,.]|$|\s+(?:i\s+(?:am\s+)?(?:in|from|live|have|stay)|and\s+i|from|in\s+|phone|mobile|village|my\s+phone))/i,
+      // Hindi patterns
       /(?:मेरा नाम|नाम)\s+([^\s]+(?:\s+[^\s]+)?)\s*(?:है|और|फोन|गांव|एकड़|मोबाइल|मैं|,|$)/i,
+      // Punjabi patterns  
       /(?:ਮੇਰਾ ਨਾਮ|ਨਾਮ)\s+([^\s]+(?:\s+[^\s]+)?)\s*(?:ਹੈ|ਅਤੇ|ਫੋਨ|ਪਿੰਡ|,|$)/i,
-      // Bengali: আমার নাম X - captures name until punctuation or next sentence
+      // Bengali: আমার নাম X
       /আমার\s+নাম\s+([\u0980-\u09FF\s]+?)(?:\s*[।\.\|]|\s+আমি|\s+আমার|$)/i,
       /নাম\s+([\u0980-\u09FF]+(?:\s+[\u0980-\u09FF]+)?)\s*(?:।|\.|আমি|$)/i,
     ];
@@ -441,10 +613,24 @@ function BookMachineContent() {
     for (const pattern of patterns) {
       const match = text.match(pattern);
       if (match && match[1]) {
-        const name = match[1].trim().replace(/[।\.]/g, '');
-        // Validate it looks like a name (not a number or common word)
-        if (name.length > 1 && !/^\d+$/.test(name) && !isCommonWord(name)) {
-          return capitalizeWords(name);
+        let name = match[1].trim().replace(/[।\.]/g, '');
+        // Remove trailing "I" or common words that got captured
+        name = name.replace(/\s+i$/i, '').trim();
+        
+        // Split and validate each word
+        const nameWords = name.split(/\s+/);
+        const validNameWords = nameWords.filter(word => {
+          const lowerWord = word.toLowerCase();
+          // Must be at least 2 chars, not a number, not a common word
+          return word.length >= 2 && 
+                 !/^\d+$/.test(word) && 
+                 !nonNameWords.includes(lowerWord) &&
+                 !isCommonWord(word);
+        });
+        
+        // Need at least one valid name word
+        if (validNameWords.length >= 1) {
+          return capitalizeWords(validNameWords.join(' '));
         }
       }
     }
@@ -474,6 +660,25 @@ function BookMachineContent() {
   // Extract acres from text
   const extractAcres = (text: string): number | null => {
     const lowerText = text.toLowerCase();
+    
+    // First, try to find any number followed by acres/land context
+    // Pattern for "24 acres" or "I have 24 acres"
+    const simpleAcreMatch = lowerText.match(/(\d+(?:\.\d+)?)\s*(?:acre|acres)/i);
+    if (simpleAcreMatch) {
+      const num = parseFloat(simpleAcreMatch[1]);
+      if (!isNaN(num) && num > 0 && num < 10000) {
+        return num;
+      }
+    }
+    
+    // Pattern for "have X acres of land"
+    const haveLandMatch = lowerText.match(/have\s+(\d+(?:\.\d+)?)\s*(?:acre|acres)/i);
+    if (haveLandMatch) {
+      const num = parseFloat(haveLandMatch[1]);
+      if (!isNaN(num) && num > 0 && num < 10000) {
+        return num;
+      }
+    }
     
     // Pattern for numbers followed by acre keywords
     const patterns = [
@@ -517,16 +722,28 @@ function BookMachineContent() {
 
   // Extract location/village from text
   const extractLocation = (text: string): string | null => {
+    const lowerText = text.toLowerCase();
+    
+    // Simple pattern: "in [City/Location]" - most common conversational pattern
+    // "I in Kolkata" or "I am in Kolkata" or "I live in Kolkata"
+    const inPattern = /(?:i\s+)?(?:am\s+)?(?:live\s+)?in\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)/i;
+    const inMatch = text.match(inPattern);
+    if (inMatch && inMatch[1]) {
+      const loc = inMatch[1].trim();
+      if (loc.length > 1 && !/^\d+$/.test(loc) && !isCommonWord(loc)) {
+        return capitalizeWords(loc);
+      }
+    }
+    
     // Patterns for location extraction
     const patterns = [
-      /(?:village|from|at|location|place|live in|living in)\s+(?:is\s+)?([a-zA-Z\s]+?)(?:\s+(?:and|phone|acre|mobile|i have|,|\.)|$)/i,
+      /(?:village|from|at|location|place|live in|living in|stay in|staying in)\s+(?:is\s+)?([a-zA-Z\s]+?)(?:\s+(?:and|phone|acre|mobile|i have|,|\.)|$)/i,
       /(?:गांव|गाँव|जगह|से|में रहता|में रहती)\s+([^\s]+(?:\s+[^\s]+)?)\s*(?:है|हूं|और|फोन|एकड़|,|$)/i,
       /(?:ਪਿੰਡ|ਥਾਂ|ਤੋਂ|ਵਿੱਚ ਰਹਿੰਦਾ)\s+([^\s]+(?:\s+[^\s]+)?)\s*(?:ਹੈ|ਅਤੇ|ਫੋਨ|,|$)/i,
       // Bengali: আমি নবগ্রামে থাকি (I live in Nabagram) - থাকি means "live"
       /আমি\s+([\u0980-\u09FF]+?)(?:তে|য়|মে|এ)?\s+থাকি/i,
       /([\u0980-\u09FF]+?)(?:তে|য়|মে|এ)\s+থাকি/i,
       /(?:গ্রাম|এলাকা|জায়গা)\s+([\u0980-\u09FF]+)/i,
-      // Also try to extract location suffix patterns like "নবগ্রামে" -> "নবগ্রাম"
     ];
     
     for (const pattern of patterns) {
@@ -555,16 +772,6 @@ function BookMachineContent() {
           setFarmerName(name);
           setExtractedFields(prev => ({ ...prev, name: true }));
           speak(`नाम ${name} भरा गया। Name set to ${name}.`, detectedLang);
-        }
-        break;
-      case 'phone':
-        const phone = extractPhone(text);
-        if (phone) {
-          setFarmerPhone(phone);
-          setExtractedFields(prev => ({ ...prev, phone: true }));
-          speak(`फोन नंबर ${phone} भरा गया।`, detectedLang);
-        } else {
-          speak('कृपया 10 अंकों का फोन नंबर बोलें। Please say 10 digit phone number.', detectedLang);
         }
         break;
       case 'acres':
@@ -599,13 +806,12 @@ function BookMachineContent() {
 
   const clearForm = () => {
     setFarmerName('');
-    setFarmerPhone('');
     setAcres('');
     setLocation('');
     setCropType('');
     setSelectedCrop(null);
     setSelectedMachine('');
-    setExtractedFields({ crop: false, machine: false, name: false, phone: false, acres: false, location: false });
+    setExtractedFields({ crop: false, machine: false, name: false, acres: false, location: false });
   };
 
   const getLocalizedText = (key: string, lang: string): string => {
@@ -674,6 +880,28 @@ function BookMachineContent() {
   const findCropFromVoice = (text: string): CropData | null => {
     const lowerText = text.toLowerCase();
     
+    // First check for "farm/firm X" or "grow X" patterns (speech recognition may say "firm" instead of "farm")
+    const farmPatterns = [
+      /(?:i\s+)?(?:farm|firm|grow|cultivate)\s+([a-zA-Z]+)/i,
+      /(?:farm|firm|grow|cultivate)\s+([a-zA-Z]+)\s+and\s+([a-zA-Z]+)/i,
+    ];
+    
+    for (const pattern of farmPatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        // Check first crop
+        if (match[1]) {
+          const crop = CROP_LOOKUP[match[1].toLowerCase()];
+          if (crop) return crop;
+        }
+        // Check second crop if present (e.g., "rice and wheat")
+        if (match[2]) {
+          const crop = CROP_LOOKUP[match[2].toLowerCase()];
+          if (crop) return crop;
+        }
+      }
+    }
+    
     // Check each word in the text against the lookup
     const words = text.split(/\s+/);
     for (const word of words) {
@@ -705,6 +933,288 @@ function BookMachineContent() {
     }
     
     return null;
+  };
+
+  // Process interview step response
+  const processInterviewResponse = (text: string, step: number) => {
+    console.log(`Processing interview step ${step}:`, text);
+    const cleanText = text.replace(/[।.,!?]/g, '').trim();
+    let fieldFilled = false;
+    let fieldValue = '';
+    
+    switch (step) {
+      case 0: // Name - be very permissive, just take what they say
+        // First try structured extraction
+        const extractedName = extractName(text);
+        if (extractedName) {
+          fieldValue = extractedName;
+        } else {
+          // Just use the cleaned text as name (remove common filler words)
+          const fillerWords = ['my', 'name', 'is', 'i', 'am', 'मेरा', 'नाम', 'है', 'हूं', 'मैं', 'ji', 'जी'];
+          const words = cleanText.split(/\s+/)
+            .filter(w => w.length > 1 && !fillerWords.includes(w.toLowerCase()) && !/^\d+$/.test(w));
+          if (words.length > 0) {
+            fieldValue = capitalizeWords(words.slice(0, 3).join(' ')); // Max 3 words for name
+          }
+        }
+        if (fieldValue) {
+          setFarmerName(fieldValue);
+          setExtractedFields(prev => ({ ...prev, name: true }));
+          fieldFilled = true;
+          console.log('Set name:', fieldValue);
+        }
+        break;
+        
+      case 1: // Acres - look for numbers
+        const extractedAcres = extractAcres(text);
+        if (extractedAcres) {
+          fieldValue = extractedAcres.toString();
+        } else {
+          // Check number words first
+          for (const [word, value] of Object.entries(NUMBER_WORDS)) {
+            if (cleanText.toLowerCase().includes(word) || cleanText.includes(word)) {
+              fieldValue = value.toString();
+              break;
+            }
+          }
+          // Then try to find any number
+          if (!fieldValue) {
+            const numberMatch = cleanText.match(/(\d+(?:\.\d+)?)/);
+            if (numberMatch) {
+              fieldValue = numberMatch[1];
+            }
+          }
+        }
+        if (fieldValue) {
+          setAcres(fieldValue);
+          setExtractedFields(prev => ({ ...prev, acres: true }));
+          fieldFilled = true;
+          console.log('Set acres:', fieldValue);
+        }
+        break;
+        
+      case 2: // Location - be very permissive
+        const extractedLocation = extractLocation(text);
+        if (extractedLocation) {
+          fieldValue = extractedLocation;
+        } else {
+          // Remove common filler words and use what's left
+          const fillerWords = ['my', 'village', 'is', 'i', 'am', 'from', 'live', 'in', 'मेरा', 'गांव', 'है', 'में', 'से', 'हूं', 'रहता'];
+          const words = cleanText.split(/\s+/)
+            .filter(w => w.length > 1 && !fillerWords.includes(w.toLowerCase()));
+          if (words.length > 0) {
+            fieldValue = capitalizeWords(words.slice(0, 3).join(' ')); // Max 3 words for location
+          }
+        }
+        if (fieldValue) {
+          setLocation(fieldValue);
+          setExtractedFields(prev => ({ ...prev, location: true }));
+          fieldFilled = true;
+          console.log('Set location:', fieldValue);
+        }
+        break;
+        
+      case 3: // Crop - use crop lookup
+        const extractedCrop = findCropFromVoice(text);
+        if (extractedCrop) {
+          setCropType(extractedCrop.id);
+          setSelectedCrop(extractedCrop);
+          autoSelectMachineForCrop(extractedCrop);
+          setExtractedFields(prev => ({ ...prev, crop: true, machine: true }));
+          fieldFilled = true;
+          fieldValue = extractedCrop.names.hi;
+          console.log('Set crop:', extractedCrop.names.en);
+        }
+        break;
+    }
+    
+    // Give voice feedback and move to next step
+    if (fieldFilled) {
+      const nextStep = Math.min(step + 1, 4);
+      setInterviewStep(nextStep);
+      interviewStepRef.current = nextStep;
+      
+      // Speak confirmation and next question
+      const confirmations: { [key: number]: { [lang: string]: string } } = {
+        0: {
+          'hi-IN': `${fieldValue}, ठीक है।`,
+          'en-IN': `Got it, ${fieldValue}.`,
+          'pa-IN': `${fieldValue}, ਠੀਕ ਹੈ।`,
+          'bn-IN': `${fieldValue}, ঠিক আছে।`,
+        },
+        1: {
+          'hi-IN': `${fieldValue} एकड़, समझ गया।`,
+          'en-IN': `${fieldValue} acres, got it.`,
+          'pa-IN': `${fieldValue} ਏਕੜ, ਸਮਝ ਗਿਆ।`,
+          'bn-IN': `${fieldValue} একর, বুঝেছি।`,
+        },
+        2: {
+          'hi-IN': `${fieldValue}, ठीक है।`,
+          'en-IN': `${fieldValue}, got it.`,
+          'pa-IN': `${fieldValue}, ਠੀਕ ਹੈ।`,
+          'bn-IN': `${fieldValue}, ঠিক আছে।`,
+        },
+        3: {
+          'hi-IN': `${fieldValue} चुना गया। मशीन अपने आप चुन ली गई।`,
+          'en-IN': `${fieldValue} selected. Machine auto-selected.`,
+          'pa-IN': `${fieldValue} ਚੁਣੀ ਗਈ। ਮਸ਼ੀਨ ਆਪਣੇ ਆਪ ਚੁਣੀ ਗਈ।`,
+          'bn-IN': `${fieldValue} নির্বাচিত। মেশিন স্বয়ংক্রিয়ভাবে নির্বাচিত।`,
+        },
+      };
+      
+      const confirmation = confirmations[step]?.[voiceLanguage] || '';
+      const nextQuestion = INTERVIEW_QUESTIONS[nextStep as keyof typeof INTERVIEW_QUESTIONS]?.[voiceLanguage] || '';
+      
+      // Speak confirmation + next question
+      if (nextStep < 4) {
+        speak(`${confirmation} ${nextQuestion}`, voiceLanguage);
+        // Auto-start listening after speech
+        setTimeout(() => {
+          startInterviewListening();
+        }, 3000);
+      } else {
+        // Final step - review
+        speak(`${confirmation} ${nextQuestion}`, voiceLanguage);
+      }
+    } else {
+      // Didn't understand, ask again
+      const retryMessages: { [lang: string]: string } = {
+        'hi-IN': 'मुझे समझ नहीं आया। कृपया फिर से बोलें।',
+        'en-IN': 'I didn\'t catch that. Please try again.',
+        'pa-IN': 'ਮੈਨੂੰ ਸਮਝ ਨਹੀਂ ਆਇਆ। ਕਿਰਪਾ ਕਰਕੇ ਦੁਬਾਰਾ ਬੋਲੋ।',
+        'bn-IN': 'আমি বুঝতে পারিনি। অনুগ্রহ করে আবার বলুন।',
+      };
+      speak(retryMessages[voiceLanguage], voiceLanguage);
+      // Retry listening
+      setTimeout(() => {
+        startInterviewListening();
+      }, 2000);
+    }
+  };
+
+  // Start interview mode
+  const startInterview = () => {
+    // Stop any existing speech/listening
+    window.speechSynthesis.cancel();
+    recognitionRef.current?.stop();
+    
+    setInterviewActive(true);
+    setInterviewStep(0);
+    interviewStepRef.current = 0;
+    setVoiceMode('interview');
+    setTranscript('');
+    
+    // Clear form
+    setFarmerName('');
+    setAcres('');
+    setLocation('');
+    setCropType('');
+    setSelectedCrop(null);
+    setSelectedMachine('');
+    setExtractedFields({ crop: false, machine: false, name: false, acres: false, location: false });
+    
+    // Speak first question with a greeting
+    const greeting = {
+      'hi-IN': 'नमस्ते! मैं आपकी बुकिंग में मदद करूंगा। कृपया अपना नाम बताइए।',
+      'en-IN': 'Hello! I\'ll help you book a machine. Please tell me your name.',
+      'pa-IN': 'ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ! ਮੈਂ ਤੁਹਾਡੀ ਬੁਕਿੰਗ ਵਿੱਚ ਮਦਦ ਕਰਾਂਗਾ। ਕਿਰਪਾ ਕਰਕੇ ਆਪਣਾ ਨਾਮ ਦੱਸੋ।',
+      'bn-IN': 'নমস্কার! আমি আপনার বুকিংয়ে সাহায্য করব। আপনার নাম বলুন।',
+    };
+    
+    speak(greeting[voiceLanguage], voiceLanguage);
+    
+    // Start listening after greeting
+    setTimeout(() => {
+      startInterviewListening();
+    }, 3500);
+  };
+
+  // Start listening in interview mode - IMPROVED
+  const startInterviewListening = () => {
+    if (isListening) {
+      console.log('Already listening, skipping');
+      return;
+    }
+    
+    // Cancel any ongoing speech first
+    window.speechSynthesis.cancel();
+    setTranscript('');
+    
+    if (typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition)) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = false; // Single utterance mode
+      recognitionRef.current.interimResults = true;
+      recognitionRef.current.lang = voiceLanguage;
+      
+      transcriptRef.current = '';
+      let hasProcessed = false;
+      
+      recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
+        let finalTranscript = '';
+        let interimTranscript = '';
+        
+        for (let i = 0; i < event.results.length; i++) {
+          const result = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += result + ' ';
+          } else {
+            interimTranscript = result;
+          }
+        }
+        
+        transcriptRef.current = finalTranscript.trim() || interimTranscript.trim();
+        setTranscript(finalTranscript || interimTranscript);
+        
+        // Process final result immediately
+        if (finalTranscript.trim() && !hasProcessed) {
+          hasProcessed = true;
+          console.log('Final transcript:', finalTranscript.trim());
+          // Small delay to let UI update
+          setTimeout(() => {
+            processInterviewResponse(finalTranscript.trim(), interviewStepRef.current);
+          }, 300);
+        }
+      };
+      
+      recognitionRef.current.onerror = (event: Event) => {
+        console.error('Speech recognition error:', event);
+        setIsListening(false);
+        // On error, prompt to try again
+        if (!hasProcessed) {
+          speak('कृपया फिर से बोलें। Please try again.', voiceLanguage);
+          setTimeout(() => startInterviewListening(), 2000);
+        }
+      };
+      
+      recognitionRef.current.onend = () => {
+        setIsListening(false);
+        // If we got interim but no final, use interim
+        if (!hasProcessed && transcriptRef.current) {
+          hasProcessed = true;
+          console.log('Using interim as final:', transcriptRef.current);
+          processInterviewResponse(transcriptRef.current, interviewStepRef.current);
+        }
+      };
+      
+      try {
+        recognitionRef.current.start();
+        setIsListening(true);
+        console.log('Started listening for step:', interviewStepRef.current);
+      } catch (error) {
+        console.error('Failed to start recognition:', error);
+        setIsListening(false);
+      }
+    }
+  };
+
+  // Stop interview
+  const stopInterview = () => {
+    setInterviewActive(false);
+    recognitionRef.current?.stop();
+    setIsListening(false);
+    window.speechSynthesis.cancel();
+    setTranscript('');
   };
 
   // Filter crops based on search term
@@ -858,12 +1368,16 @@ function BookMachineContent() {
     const bookingData = {
       machine_id: selectedMachine,
       farmer_name: farmerName,
-      farmer_phone: farmerPhone,
       acres: parseFloat(acres),
       location: location,
+      scheduled_date: new Date().toISOString(),
       timestamp: Date.now(),
       status: 'pending'
     };
+
+    // Save farmer info to localStorage for future use
+    localStorage.setItem('farmer_name', farmerName);
+    localStorage.setItem('farmer_location', location);
 
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/v1/bookings`, {
@@ -875,6 +1389,17 @@ function BookMachineContent() {
       const data = await response.json();
 
       if (data.success) {
+        // Save booking to local storage for "My Bookings" page
+        const myBookings = JSON.parse(localStorage.getItem('my_bookings') || '[]');
+        const savedBooking = {
+          ...data.booking,
+          farmer_name: farmerName,
+          location: location,
+          acres: parseFloat(acres)
+        };
+        myBookings.unshift(savedBooking); // Add to beginning
+        localStorage.setItem('my_bookings', JSON.stringify(myBookings));
+        
         // Navigate to receipt page
         router.push(`/farmer/receipt/${data.booking.id}`);
       } else {
@@ -889,10 +1414,16 @@ function BookMachineContent() {
         const offlineBooking = {
           ...bookingData,
           id: `offline_${Date.now()}`,
+          created_at: new Date().toISOString(),
           offline: true
         };
         offlineBookings.push(offlineBooking);
         localStorage.setItem('offline_bookings', JSON.stringify(offlineBookings));
+        
+        // Also save to my_bookings
+        const myBookings = JSON.parse(localStorage.getItem('my_bookings') || '[]');
+        myBookings.unshift(offlineBooking);
+        localStorage.setItem('my_bookings', JSON.stringify(myBookings));
         
         alert('📵 No internet! Booking saved offline. Will sync when online.');
         router.push(`/farmer/receipt/${offlineBooking.id}`);
@@ -933,7 +1464,7 @@ function BookMachineContent() {
       <div className="max-w-2xl mx-auto p-6">
         <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-md p-6 space-y-6">
           
-          {/* Voice Assistant - Enhanced */}
+          {/* Voice Assistant - Enhanced with Interview Mode */}
           <div className="bg-gradient-to-r from-blue-50 via-purple-50 to-green-50 border-2 border-blue-300 rounded-xl p-4">
             <div className="flex justify-between items-start mb-4">
               <div>
@@ -957,60 +1488,227 @@ function BookMachineContent() {
               </select>
             </div>
 
-            {/* Main Voice Button */}
-            <div className="flex justify-center mb-4">
+            {/* Interview Mode Toggle */}
+            <div className="mb-4 flex items-center justify-center gap-4 p-3 bg-white rounded-lg border border-blue-200">
+              <span className="text-sm font-medium text-gray-700">Mode:</span>
               <button
                 type="button"
-                onClick={() => toggleListening()}
-                className={`p-6 rounded-full transition-all transform hover:scale-105 ${
-                  isListening 
-                    ? 'bg-red-500 hover:bg-red-600 animate-pulse shadow-xl shadow-red-300' 
-                    : 'bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 shadow-lg'
-                } text-white`}
+                onClick={() => {
+                  setVoiceMode('interview');
+                  if (!interviewActive) startInterview();
+                }}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  voiceMode === 'interview' 
+                    ? 'bg-purple-600 text-white shadow-md' 
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
               >
-                {isListening ? <MicOff size={32} /> : <Mic size={32} />}
+                🎯 Step-by-Step | एक-एक करके
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setVoiceMode('full');
+                  stopInterview();
+                }}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  voiceMode === 'full' 
+                    ? 'bg-blue-600 text-white shadow-md' 
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                🎤 All at Once | सब एक साथ
               </button>
             </div>
-            
-            {isListening ? (
-              <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 text-center">
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <span className="w-2 h-2 bg-red-500 rounded-full animate-ping"></span>
-                  <span className="font-bold text-red-700">🎤 Listening... बोलते रहें...</span>
-                </div>
-                <p className="text-sm text-red-600">
-                  {currentVoiceField 
-                    ? `Recording: ${currentVoiceField}` 
-                    : 'बोलें: "मेरा नाम राम, गांव सिरसा, 5 एकड़, धान, फोन 9876543210"'}
-                </p>
-                <button
-                  type="button"
-                  onClick={stopListening}
-                  className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700"
-                >
-                  ✓ Done Speaking | बोलना हो गया
-                </button>
-              </div>
-            ) : (
-              <p className="text-center text-sm text-gray-600">
-                👆 Click mic & say all details in one sentence | माइक दबाएं और सब कुछ एक साथ बोलें
-              </p>
-            )}
 
-            {transcript && (
-              <div className="bg-white border-2 border-blue-200 rounded-lg p-3 mt-3">
-                <p className="text-xs text-gray-500 mb-1">🗣️ You said:</p>
-                <p className="text-sm font-medium text-gray-800">{transcript}</p>
-                {!isListening && (
+            {/* Interview Mode Progress */}
+            {voiceMode === 'interview' && interviewActive && (
+              <div className="mb-4 bg-purple-50 border-2 border-purple-300 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm font-bold text-purple-800">
+                    📋 Interview Progress | साक्षात्कार प्रगति
+                  </span>
                   <button
                     type="button"
-                    onClick={() => handleVoiceCommand(transcript)}
-                    className="mt-2 px-4 py-1.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"
+                    onClick={stopInterview}
+                    className="text-xs text-red-600 hover:text-red-700 underline"
                   >
-                    ✨ Process & Fill Form | फॉर्म भरें
+                    ✕ Stop
                   </button>
+                </div>
+                
+                {/* Progress Steps */}
+                <div className="flex items-center justify-between mb-4">
+                  {[0, 1, 2, 3, 4].map((step) => (
+                    <div 
+                      key={step}
+                      className={`flex flex-col items-center ${
+                        interviewStep === step 
+                          ? 'scale-110' 
+                          : interviewStep > step 
+                            ? 'opacity-60' 
+                            : 'opacity-40'
+                      }`}
+                    >
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                        interviewStep === step 
+                          ? 'bg-purple-600 text-white ring-4 ring-purple-300 animate-pulse' 
+                          : interviewStep > step 
+                            ? 'bg-green-500 text-white' 
+                            : 'bg-gray-300 text-gray-600'
+                      }`}>
+                        {interviewStep > step ? '✓' : step + 1}
+                      </div>
+                      <span className="text-xs mt-1 text-center">
+                        {INTERVIEW_QUESTIONS[step as keyof typeof INTERVIEW_QUESTIONS]?.label.split(' / ')[0]}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Current Question */}
+                <div className="bg-white rounded-lg p-3 border border-purple-200">
+                  <p className="text-sm font-medium text-purple-800 mb-2">
+                    {INTERVIEW_QUESTIONS[interviewStep as keyof typeof INTERVIEW_QUESTIONS]?.[voiceLanguage] || 'Complete!'}
+                  </p>
+                  
+                  {interviewStep < 4 && (
+                    <div className="space-y-3">
+                      {/* Listening indicator or Start button */}
+                      {isListening ? (
+                        <div className="flex items-center justify-center gap-2 py-3 bg-red-50 rounded-lg border border-red-200">
+                          <span className="w-3 h-3 bg-red-500 rounded-full animate-ping"></span>
+                          <span className="text-sm font-medium text-red-700">🎤 Listening... सुन रहा हूं...</span>
+                          <button
+                            type="button"
+                            onClick={() => recognitionRef.current?.stop()}
+                            className="ml-2 px-2 py-1 bg-red-600 text-white rounded text-xs"
+                          >
+                            Done
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={startInterviewListening}
+                          className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-bold flex items-center justify-center gap-2 shadow-md"
+                        >
+                          <Mic size={20} />
+                          🎤 Tap to Answer | बोलने के लिए दबाएं
+                        </button>
+                      )}
+                      
+                      {/* Helper buttons */}
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const question = INTERVIEW_QUESTIONS[interviewStep as keyof typeof INTERVIEW_QUESTIONS];
+                            if (question) speak(question[voiceLanguage], voiceLanguage);
+                          }}
+                          className="flex-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium"
+                        >
+                          🔄 Repeat | दोहराएं
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // Skip to next step
+                            const nextStep = Math.min(interviewStep + 1, 4);
+                            setInterviewStep(nextStep);
+                            interviewStepRef.current = nextStep;
+                            if (nextStep < 4) {
+                              const question = INTERVIEW_QUESTIONS[nextStep as keyof typeof INTERVIEW_QUESTIONS];
+                              if (question) {
+                                speak(question[voiceLanguage], voiceLanguage);
+                                setTimeout(() => startInterviewListening(), 2500);
+                              }
+                            }
+                          }}
+                          className="flex-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium"
+                        >
+                          ⏭️ Skip | छोड़ें
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {interviewStep === 4 && (
+                    <div className="text-center py-2">
+                      <p className="text-green-600 font-medium">✅ All fields captured! Review below and submit.</p>
+                      <p className="text-green-600 text-sm">सभी जानकारी भरी गई! नीचे देखें और बुक करें।</p>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Transcript in interview mode */}
+                {transcript && (
+                  <div className="mt-3 bg-gray-50 rounded-lg p-2 border">
+                    <p className="text-xs text-gray-500">🗣️ You said: <span className="font-medium text-gray-700">{transcript}</span></p>
+                  </div>
                 )}
               </div>
+            )}
+
+            {/* Free Mode UI (original) */}
+            {voiceMode === 'full' && (
+              <>
+                {/* Main Voice Button */}
+                <div className="flex justify-center mb-4">
+                  <button
+                    type="button"
+                    onClick={() => toggleListening()}
+                    className={`p-6 rounded-full transition-all transform hover:scale-105 ${
+                      isListening 
+                        ? 'bg-red-500 hover:bg-red-600 animate-pulse shadow-xl shadow-red-300' 
+                        : 'bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 shadow-lg'
+                    } text-white`}
+                  >
+                    {isListening ? <MicOff size={32} /> : <Mic size={32} />}
+                  </button>
+                </div>
+                
+                {isListening ? (
+                  <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 text-center">
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      <span className="w-2 h-2 bg-red-500 rounded-full animate-ping"></span>
+                      <span className="font-bold text-red-700">🎤 Listening... बोलते रहें...</span>
+                    </div>
+                    <p className="text-sm text-red-600">
+                      {currentVoiceField 
+                        ? `Recording: ${currentVoiceField}` 
+                        : 'बोलें: "मेरा नाम राम, गांव सिरसा, 5 एकड़, धान"'}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={stopListening}
+                      className="mt-3 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700"
+                    >
+                      ✓ Done Speaking | बोलना हो गया
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-center text-sm text-gray-600">
+                    👆 Click mic & say all details in one sentence | माइक दबाएं और सब कुछ एक साथ बोलें
+                  </p>
+                )}
+
+                {transcript && (
+                  <div className="bg-white border-2 border-blue-200 rounded-lg p-3 mt-3">
+                    <p className="text-xs text-gray-500 mb-1">🗣️ You said:</p>
+                    <p className="text-sm font-medium text-gray-800">{transcript}</p>
+                    {!isListening && (
+                      <button
+                        type="button"
+                        onClick={() => handleVoiceCommand(transcript)}
+                        className="mt-2 px-4 py-1.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"
+                      >
+                        ✨ Process & Fill Form | फॉर्म भरें
+                      </button>
+                    )}
+                  </div>
+                )}
+              </>
             )}
 
             {/* Show what was detected */}
@@ -1022,7 +1720,6 @@ function BookMachineContent() {
                   {location && <p>📍 {location}</p>}
                   {acres && <p>📐 {acres} acres/एकड़</p>}
                   {cropType && <p>🌾 {cropType}</p>}
-                  {farmerPhone && <p>📱 {farmerPhone}</p>}
                 </div>
               </div>
             )}
@@ -1033,7 +1730,6 @@ function BookMachineContent() {
                 { key: 'crop', label: 'फसल/Crop', icon: '🌾' },
                 { key: 'machine', label: 'मशीन', icon: '🚜' },
                 { key: 'name', label: 'नाम/Name', icon: '👤' },
-                { key: 'phone', label: 'फोन', icon: '📱' },
                 { key: 'acres', label: 'एकड़', icon: '📐' },
                 { key: 'location', label: 'गांव', icon: '📍' },
               ].map(({ key, label, icon }) => (
@@ -1225,10 +1921,17 @@ function BookMachineContent() {
           </div>
 
           {/* Crop Type Selection */}
-          <div>
+          <div className={`transition-all duration-300 ${
+            voiceMode === 'interview' && interviewActive && interviewStep === 3 
+              ? 'ring-4 ring-purple-400 rounded-lg p-3 bg-purple-50' 
+              : ''
+          }`}>
             <label className="block text-sm font-medium mb-2">
               <Leaf className="inline mr-1" size={16} />
               Crop Type | फसल का प्रकार <span className="text-red-500">*</span>
+              {voiceMode === 'interview' && interviewActive && interviewStep === 3 && (
+                <span className="ml-2 text-purple-600 text-xs animate-pulse">← बोलें (गेहूं, धान, गन्ना...)</span>
+              )}
             </label>
             <select
               value={cropType}
@@ -1243,7 +1946,11 @@ function BookMachineContent() {
                 }
               }}
               required
-              className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+                voiceMode === 'interview' && interviewActive && interviewStep === 3 
+                  ? 'border-purple-500 bg-white' 
+                  : ''
+              }`}
             >
               <option value="">-- Select Crop / फसल चुनें --</option>
               {cropMachinesData.crops.map((crop: CropData) => (
@@ -1301,9 +2008,16 @@ function BookMachineContent() {
           )}
 
           {/* Farmer Name */}
-          <div>
+          <div className={`transition-all duration-300 ${
+            voiceMode === 'interview' && interviewActive && interviewStep === 0 
+              ? 'ring-4 ring-purple-400 rounded-lg p-3 bg-purple-50' 
+              : ''
+          }`}>
             <label className="block text-sm font-medium mb-2">
               Your Name | आपका नाम <span className="text-red-500">*</span>
+              {voiceMode === 'interview' && interviewActive && interviewStep === 0 && (
+                <span className="ml-2 text-purple-600 text-xs animate-pulse">← बोलें</span>
+              )}
             </label>
             <input
               type="text"
@@ -1311,30 +2025,25 @@ function BookMachineContent() {
               onChange={(e) => setFarmerName(e.target.value)}
               required
               placeholder="Enter your name"
-              className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            />
-          </div>
-
-          {/* Phone */}
-          <div>
-            <label className="block text-sm font-medium mb-2">
-              Phone Number | फोन नंबर <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="tel"
-              value={farmerPhone}
-              onChange={(e) => setFarmerPhone(e.target.value)}
-              required
-              placeholder="10-digit mobile number"
-              pattern="[0-9]{10}"
-              className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+                voiceMode === 'interview' && interviewActive && interviewStep === 0 
+                  ? 'border-purple-500 bg-white' 
+                  : ''
+              }`}
             />
           </div>
 
           {/* Acres */}
-          <div>
+          <div className={`transition-all duration-300 ${
+            voiceMode === 'interview' && interviewActive && interviewStep === 1 
+              ? 'ring-4 ring-purple-400 rounded-lg p-3 bg-purple-50' 
+              : ''
+          }`}>
             <label className="block text-sm font-medium mb-2">
               Land Area (Acres) | जमीन (एकड़) <span className="text-red-500">*</span>
+              {voiceMode === 'interview' && interviewActive && interviewStep === 1 && (
+                <span className="ml-2 text-purple-600 text-xs animate-pulse">← बोलें</span>
+              )}
             </label>
             <input
               type="number"
@@ -1344,14 +2053,25 @@ function BookMachineContent() {
               step="0.1"
               min="0.1"
               placeholder="e.g., 5.5"
-              className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+                voiceMode === 'interview' && interviewActive && interviewStep === 1 
+                  ? 'border-purple-500 bg-white' 
+                  : ''
+              }`}
             />
           </div>
 
           {/* Location */}
-          <div>
+          <div className={`transition-all duration-300 ${
+            voiceMode === 'interview' && interviewActive && interviewStep === 2 
+              ? 'ring-4 ring-purple-400 rounded-lg p-3 bg-purple-50' 
+              : ''
+          }`}>
             <label className="block text-sm font-medium mb-2">
               Village / Location | गांव <span className="text-red-500">*</span>
+              {voiceMode === 'interview' && interviewActive && interviewStep === 2 && (
+                <span className="ml-2 text-purple-600 text-xs animate-pulse">← बोलें</span>
+              )}
             </label>
             <input
               type="text"
@@ -1359,7 +2079,11 @@ function BookMachineContent() {
               onChange={(e) => setLocation(e.target.value)}
               required
               placeholder="Enter village or location"
-              className="w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+                voiceMode === 'interview' && interviewActive && interviewStep === 2 
+                  ? 'border-purple-500 bg-white' 
+                  : ''
+              }`}
             />
           </div>
 

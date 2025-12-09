@@ -196,4 +196,46 @@ router.get('/:id/alerts', async (req, res) => {
   }
 });
 
+// POST /api/v1/machines - Create a new machine
+router.post('/', async (req, res) => {
+  try {
+    if (!db.isConfigured()) {
+      return res.status(503).json({ error: 'Database not configured' });
+    }
+
+    const { device_id, name, type, model, district, state, status, owner_id } = req.body;
+
+    if (!device_id || !name || !type) {
+      return res.status(400).json({ error: 'device_id, name, and type are required' });
+    }
+
+    const { data, error } = await db.supabase
+      .from('machines')
+      .insert({
+        device_id,
+        name,
+        type,
+        model: model || null,
+        district: district || null,
+        state: state || null,
+        status: status || 'available',
+        owner_id: owner_id || null
+      })
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        return res.status(409).json({ error: 'Machine with this device_id already exists' });
+      }
+      throw error;
+    }
+
+    console.log(`🚜 Machine created: ${name} (${device_id})`);
+    res.status(201).json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

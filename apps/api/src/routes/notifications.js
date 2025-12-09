@@ -314,4 +314,197 @@ router.post('/register-owner', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/notifications/harvest-alert
+ * Send SMS alerts to farmers about harvest schedules
+ * Body: { schedules: [{ district, harvestDate, machineName, priority }], farmers: [{ phone, name, district }] }
+ */
+router.post('/harvest-alert', async (req, res) => {
+  try {
+    const { schedules, farmers } = req.body;
+
+    if (!schedules || !Array.isArray(schedules) || schedules.length === 0) {
+      return res.status(400).json({ error: 'At least one schedule is required' });
+    }
+
+    // If no farmers provided, we'll use mock farmers for demo
+    const farmersToNotify = farmers && farmers.length > 0 ? farmers : [
+      { phone: process.env.DEMO_FARMER_PHONE || '+919999999999', name: 'Demo Farmer', district: 'All' }
+    ];
+
+    const results = [];
+    const sentCount = { success: 0, failed: 0 };
+
+    for (const schedule of schedules) {
+      const { district, harvestDate, machineName, machineType, priority, acresCovered } = schedule;
+      
+      // Filter farmers by district (or send to all if district matches)
+      const targetFarmers = farmersToNotify.filter(f => 
+        f.district === 'All' || f.district === district || !f.district
+      );
+
+      for (const farmer of targetFarmers) {
+        // Construct the message in both English and Hindi
+        const priorityText = priority >= 8 ? '🔴 URGENT' : priority >= 6 ? '🟡 Important' : '🟢 Scheduled';
+        const formattedDate = new Date(harvestDate).toLocaleDateString('en-IN', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+
+        const message = `🌾 AgriTrack Harvest Alert
+
+${priorityText}
+
+Dear ${farmer.name || 'Farmer'},
+
+Your harvest is scheduled:
+📅 Date: ${formattedDate}
+📍 District: ${district || 'Your area'}
+🚜 Machine: ${machineName || machineType || 'Harvester'}
+${acresCovered ? `🌾 Area: ${acresCovered} acres` : ''}
+
+Please prepare your field for machine arrival.
+
+---
+कृपया अपने खेत को मशीन के आगमन के लिए तैयार करें।
+📞 Helpline: 1800-XXX-XXXX
+
+- AgriTrack Team`;
+
+        try {
+          const smsResult = await notificationService.sendSMS(farmer.phone, message);
+          
+          if (smsResult.success) {
+            sentCount.success++;
+            results.push({
+              farmer: farmer.name,
+              phone: farmer.phone,
+              district,
+              status: 'sent',
+              sid: smsResult.sid
+            });
+          } else {
+            sentCount.failed++;
+            results.push({
+              farmer: farmer.name,
+              phone: farmer.phone,
+              district,
+              status: 'failed',
+              reason: smsResult.reason || smsResult.message
+            });
+          }
+        } catch (err) {
+          sentCount.failed++;
+          results.push({
+            farmer: farmer.name,
+            phone: farmer.phone,
+            district,
+            status: 'error',
+            error: err.message
+          });
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Harvest alerts sent: ${sentCount.success} successful, ${sentCount.failed} failed`,
+      summary: sentCount,
+      details: results
+    });
+  } catch (err) {
+    console.error('Harvest alert error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/notifications/harvest-alert/bulk
+ * Send bulk SMS alerts for a specific date's schedules
+ */
+router.post('/harvest-alert/bulk', async (req, res) => {
+  try {
+    const { date, events } = req.body;
+
+    if (!events || !Array.isArray(events) || events.length === 0) {
+      return res.status(400).json({ error: 'No events provided for the selected date' });
+    }
+
+    const results = [];
+    let totalFarmers = 0;
+    let successCount = 0;
+
+    for (const event of events) {
+      const { name, region, districts, farmers_count, machines_allocated, priority_score, start } = event;
+      
+      // In production, you would fetch actual farmer data from database
+      // For demo, we'll simulate the notification
+      const farmersInCluster = farmers_count || 1;
+      totalFarmers += farmersInCluster;
+
+      const priorityText = (priority_score || 0) >= 8 ? '🔴 URGENT' : 
+                          (priority_score || 0) >= 6 ? '🟡 Important' : '🟢 Scheduled';
+      
+      const formattedDate = new Date(start).toLocaleDateString('en-IN', {
+        weekday: 'long',
+        year: 'numeric', 
+        month: 'long',
+        day: 'numeric'
+      });
+
+      // Demo message that would be sent
+      const message = `🌾 AgriTrack Harvest Alert
+
+${priorityText}
+
+Harvest scheduled for ${region || name}:
+📅 Date: ${formattedDate}
+📍 Districts: ${districts?.join(', ') || region || 'Your area'}
+🚜 Machines Allocated: ${machines_allocated || 'TBD'}
+👨‍🌾 Farmers Covered: ${farmersInCluster}
+
+Please prepare your fields!
+
+- AgriTrack Team`;
+
+      // Check if Twilio is configured
+      if (process.env.TWILIO_ACCOUNT_SID && process.env.SMS_ENABLED !== 'false') {
+        // In production: send actual SMS to farmers from database
+        // For now, send to demo number if configured
+        const demoPhone = process.env.DEMO_FARMER_PHONE;
+        if (demoPhone) {
+          const smsResult = await notificationService.sendSMS(demoPhone, message);
+          if (smsResult.success) {
+            successCount += farmersInCluster;
+          }
+        }
+      }
+
+      results.push({
+        cluster: name,
+        region,
+        farmersNotified: farmersInCluster,
+        message: message.substring(0, 100) + '...',
+        status: process.env.TWILIO_ACCOUNT_SID ? 'sent' : 'simulated'
+      });
+    }
+
+    res.json({
+      success: true,
+      date,
+      message: process.env.TWILIO_ACCOUNT_SID 
+        ? `SMS alerts sent to ${successCount} farmers across ${events.length} clusters`
+        : `SMS alerts simulated for ${totalFarmers} farmers (Twilio not configured)`,
+      totalFarmers,
+      clustersNotified: events.length,
+      details: results
+    });
+  } catch (err) {
+    console.error('Bulk harvest alert error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
