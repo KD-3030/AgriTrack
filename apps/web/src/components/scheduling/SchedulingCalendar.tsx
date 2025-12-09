@@ -73,6 +73,8 @@ interface SchedulingCalendarProps {
 export function SchedulingCalendar({ events, summary, heatmapData, onEventClick }: SchedulingCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined)
+  const [isSendingSMS, setIsSendingSMS] = useState(false)
+  const [smsResult, setSmsResult] = useState<{ success: boolean; message: string } | null>(null)
   const [selectedEvent, setSelectedEvent] = useState<ScheduleEvent | null>(null)
   const [view, setView] = useState<'month' | 'week'>('month')
   const [showDistribution, setShowDistribution] = useState(true)
@@ -199,6 +201,61 @@ export function SchedulingCalendar({ events, summary, heatmapData, onEventClick 
   const goToToday = () => {
     setCurrentMonth(new Date())
     setSelectedDate(new Date())
+  }
+
+  // Send SMS alerts to farmers for selected date's events
+  const handleSendSMSAlert = async () => {
+    if (!selectedDate || selectedDateEvents.length === 0) return
+    
+    setIsSendingSMS(true)
+    setSmsResult(null)
+    
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+      
+      const response = await fetch(`${API_URL}/api/v1/notifications/harvest-alert/bulk`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          date: selectedDate.toISOString(),
+          events: selectedDateEvents.map(event => ({
+            name: event.name,
+            region: event.region,
+            districts: event.districts,
+            farmers_count: event.farmers_count,
+            machines_allocated: event.machines_allocated,
+            priority_score: event.priority_score,
+            start: event.start
+          }))
+        })
+      })
+      
+      const data = await response.json()
+      
+      if (response.ok) {
+        setSmsResult({
+          success: true,
+          message: data.message || `SMS alerts sent to ${data.totalFarmers} farmers!`
+        })
+      } else {
+        setSmsResult({
+          success: false,
+          message: data.error || 'Failed to send SMS alerts'
+        })
+      }
+    } catch (error) {
+      console.error('SMS Alert error:', error)
+      setSmsResult({
+        success: false,
+        message: 'Failed to connect to server. Please try again.'
+      })
+    } finally {
+      setIsSendingSMS(false)
+      // Clear result after 5 seconds
+      setTimeout(() => setSmsResult(null), 5000)
+    }
   }
 
   // Days of week header
@@ -542,11 +599,42 @@ export function SchedulingCalendar({ events, summary, heatmapData, onEventClick 
                     </div>
 
                     {/* Quick Actions */}
-                    <div className="pt-3 border-t">
-                      <button className="w-full py-2 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-colors">
-                        <Phone className="w-4 h-4" />
-                        Send SMS Alert to Farmers
+                    <div className="pt-3 border-t space-y-2">
+                      <button 
+                        onClick={handleSendSMSAlert}
+                        disabled={isSendingSMS}
+                        className={`w-full py-2 px-4 text-white rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-colors ${
+                          isSendingSMS 
+                            ? 'bg-gray-400 cursor-not-allowed' 
+                            : 'bg-emerald-600 hover:bg-emerald-700'
+                        }`}
+                      >
+                        {isSendingSMS ? (
+                          <>
+                            <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Sending SMS...
+                          </>
+                        ) : (
+                          <>
+                            <Phone className="w-4 h-4" />
+                            Send SMS Alert to Farmers
+                          </>
+                        )}
                       </button>
+                      
+                      {/* SMS Result Message */}
+                      {smsResult && (
+                        <div className={`p-2 rounded-lg text-xs text-center ${
+                          smsResult.success 
+                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' 
+                            : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                        }`}>
+                          {smsResult.success ? '✓ ' : '✗ '}{smsResult.message}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : (

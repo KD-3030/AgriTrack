@@ -9,10 +9,29 @@ const mockBookings = [];
 router.get('/', async (req, res) => {
   try {
     if (!db.isConfigured()) {
-      return res.json(mockBookings);
+      const { farmer_phone, status, farmer_id } = req.query;
+      
+      let filteredBookings = [...mockBookings];
+      
+      // Filter by farmer_phone if provided
+      if (farmer_phone) {
+        filteredBookings = filteredBookings.filter(b => b.farmer_phone === farmer_phone);
+      }
+      
+      // Filter by farmer_id if provided
+      if (farmer_id) {
+        filteredBookings = filteredBookings.filter(b => b.farmer_id === farmer_id);
+      }
+      
+      // Filter by status if provided
+      if (status) {
+        filteredBookings = filteredBookings.filter(b => b.status === status);
+      }
+      
+      return res.json(filteredBookings);
     }
     
-    const { status, farmer_id } = req.query;
+    const { status, farmer_id, farmer_phone } = req.query;
     
     const { data, error } = await db.getBookings({
       status,
@@ -20,7 +39,15 @@ router.get('/', async (req, res) => {
     });
 
     if (error) throw error;
-    res.json(data || []);
+    
+    let result = data || [];
+    
+    // Filter by farmer_phone if provided (for mock data compatibility)
+    if (farmer_phone && result.length > 0) {
+      result = result.filter(b => b.farmer_phone === farmer_phone);
+    }
+    
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -74,6 +101,8 @@ router.post('/', async (req, res) => {
       const newBooking = {
         id: `BK${Date.now()}`,
         machine_id,
+        machine_name: getMachineName(machine_id),
+        machine_type: getMachineType(machine_id),
         farmer_id: farmer_id || 'farmer_guest',
         farmer_name: farmer_name || 'Guest Farmer',
         farmer_phone: farmer_phone || '',
@@ -92,6 +121,8 @@ router.post('/', async (req, res) => {
         farmer_name: newBooking.farmer_name,
         farmer_phone: newBooking.farmer_phone,
         machine_id: newBooking.machine_id,
+        machine_name: newBooking.machine_name,
+        machine_type: newBooking.machine_type,
         location: newBooking.location,
         acres: newBooking.acres,
         date: newBooking.created_at,
@@ -178,12 +209,25 @@ router.patch('/:id', async (req, res) => {
 // GET /api/v1/bookings/:id - Get single booking
 router.get('/:id', async (req, res) => {
   try {
+    const machineStates = req.app.get('machineStates');
+    
     if (!db.isConfigured()) {
       const booking = mockBookings.find(b => b.id === req.params.id);
       if (!booking) {
         return res.status(404).json({ error: 'Booking not found' });
       }
-      return res.json(booking);
+      
+      // Get machine details from machineStates
+      const machineData = machineStates?.get(booking.machine_id);
+      
+      // Add machine name and type to booking response
+      const enrichedBooking = {
+        ...booking,
+        machine_name: getMachineName(booking.machine_id),
+        machine_type: getMachineType(booking.machine_id)
+      };
+      
+      return res.json(enrichedBooking);
     }
 
     const { data, error } = await db.getBookings();
@@ -194,10 +238,54 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Booking not found' });
     }
     
-    res.json(booking);
+    // Get machine details from machineStates
+    const machineData = machineStates?.get(booking.machine_id);
+    
+    // Add machine name and type to booking response
+    const enrichedBooking = {
+      ...booking,
+      machine_name: machineData?.name || getMachineName(booking.machine_id),
+      machine_type: getMachineType(booking.machine_id)
+    };
+    
+    res.json(enrichedBooking);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
+// Helper function to get machine name from ID
+function getMachineName(machineId) {
+  const machineNames = {
+    'SS-001': 'Super Seeder Alpha',
+    'SS-002': 'Super Seeder Beta',
+    'BL-001': 'Baler Pro 500',
+    'BL-002': 'Baler Pro 600',
+    'HS-001': 'Happy Seeder Plus',
+    'HS-002': 'Happy Seeder Max',
+    'RT-001': 'Rotavator RS-200',
+    'RT-002': 'Rotavator RS-300',
+    'ML-001': 'Mulcher M-1000',
+    'ML-002': 'Mulcher M-2000'
+  };
+  
+  return machineNames[machineId] || `Machine ${machineId}`;
+}
+
+// Helper function to get machine type from ID
+function getMachineType(machineId) {
+  if (!machineId) return 'Agricultural Machine';
+  
+  const prefix = machineId.split('-')[0];
+  const machineTypes = {
+    'SS': 'Super Seeder',
+    'BL': 'Baler',
+    'HS': 'Happy Seeder',
+    'RT': 'Rotavator',
+    'ML': 'Mulcher'
+  };
+  
+  return machineTypes[prefix] || 'Agricultural Machine';
+}
 
 module.exports = router;
