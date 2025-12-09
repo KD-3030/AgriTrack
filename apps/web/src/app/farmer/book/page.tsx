@@ -22,25 +22,14 @@ interface MachineData {
   crops: string[];
 }
 
-// Bengali crop name mappings
+// Bengali crop name mappings (Top 5 CRM crops only)
 const BENGALI_CROP_NAMES: { [key: string]: string } = {
   'ধান': 'rice',
+  'চাল': 'rice',
   'গম': 'wheat',
   'ভুট্টা': 'maize',
   'আখ': 'sugarcane',
   'তুলা': 'cotton',
-  'সয়াবিন': 'soybean',
-  'সরিষা': 'mustard',
-  'চিনাবাদাম': 'groundnut',
-  'আলু': 'potato',
-  'পেঁয়াজ': 'onion',
-  'টমেটো': 'tomato',
-  'বাজরা': 'bajra',
-  'জোয়ার': 'jowar',
-  'ডাল': 'pulses',
-  'মসুর': 'lentils',
-  'ছোলা': 'chickpea',
-  'পাট': 'jute',
   // Common cultivation terms
   'চাষ': '', // "cultivation"
   'করি': '', // "do/cultivate"

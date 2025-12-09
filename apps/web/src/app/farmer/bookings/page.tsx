@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Activity, Clock, CheckCircle, AlertCircle, Zap } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
+import FeedbackForm from '@/components/FeedbackForm';
 
 interface Booking {
   id: string;
@@ -29,6 +30,7 @@ export default function MyBookings() {
   const [vibrationData, setVibrationData] = useState<VibrationData[]>([]);
   const [isOnline, setIsOnline] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [showFeedbackForm, setShowFeedbackForm] = useState(false);
 
   useEffect(() => {
     loadBookings();
@@ -361,6 +363,37 @@ export default function MyBookings() {
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* Feedback Form */}
+            {selectedBooking && showFeedbackForm && !selectedBooking.offline && (
+              <div className="bg-white rounded-xl shadow-md p-6">
+                <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                  ⭐ Rate Your Experience | अपना अनुभव साझा करें
+                </h2>
+                <FeedbackForm
+                  bookingId={selectedBooking.id}
+                  farmerId={selectedBooking.farmer_name || 'FARMER123'}
+                  operatorId={selectedBooking.machine_id}
+                  machineId={selectedBooking.machine_id}
+                  onSuccess={() => {
+                    setShowFeedbackForm(false);
+                    loadBookings();
+                    alert('✅ Feedback submitted successfully!');
+                  }}
+                  onCancel={() => setShowFeedbackForm(false)}
+                />
+              </div>
+            )}
+
+            {/* Submit Feedback Button */}
+            {selectedBooking && !showFeedbackForm && !selectedBooking.offline && (
+              <button
+                onClick={() => setShowFeedbackForm(true)}
+                className="w-full bg-yellow-600 hover:bg-yellow-700 text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2"
+              >
+                ⭐ Submit Feedback & Complete Work | फीडबैक दें
+              </button>
             )}
 
             {/* View Receipt Button */}
