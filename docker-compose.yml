@@ -43,6 +43,14 @@ services:
       - SMTP_USER=${SMTP_USER}
       - SMTP_PASSWORD=${SMTP_PASSWORD}
       - EMAIL_FROM=${EMAIL_FROM}
+      # WhatsApp Integration
+      - WHATSAPP_PROVIDER=${WHATSAPP_PROVIDER:-whatsapp-web}
+      - META_WHATSAPP_PHONE_ID=${META_WHATSAPP_PHONE_ID}
+      - META_WHATSAPP_ACCESS_TOKEN=${META_WHATSAPP_ACCESS_TOKEN}
+      - GREEN_API_ID=${GREEN_API_ID}
+      - GREEN_API_TOKEN=${GREEN_API_TOKEN}
+    volumes:
+      - whatsapp-session:/app/.wwebjs_auth
     depends_on:
       - mqtt-broker
     restart: unless-stopped
@@ -123,3 +131,4 @@ networks:
 
 volumes:
   mqtt-data:
+  whatsapp-session:

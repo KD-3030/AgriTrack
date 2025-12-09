@@ -2,6 +2,20 @@ FROM node:20-alpine
 
 WORKDIR /app
 
+# Install Chromium and dependencies for WhatsApp Web.js (Puppeteer)
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    && rm -rf /var/cache/apk/*
+
+# Set Puppeteer environment variables
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
 # Use npm mirror for reliability
 RUN npm config set registry https://registry.npmmirror.com
 
